@@ -66,6 +66,7 @@ dist/harness_blender_bridge-0.1.0.zip
    - Host: `localhost`
    - Port: `9876`
    - Auto Start: activado
+   - Access Token: `harness-v0-local` (puedes cambiarlo, pero debe coincidir con `BLENDER_TOKEN`)
 
 ### 3. Instalar el servidor externo
 
@@ -119,4 +120,4 @@ tests/                       Pruebas fuera de Blender
 
 ## Licencia y procedencia
 
-El repositorio se publica bajo GPL-3.0-or-later. La capa bridge deriva del add-on MCP de Blender Lab incluido por el propietario del repositorio; se conservan sus encabezados SPDX y atribución. Consulta `THIRD_PARTY_NOTICES.md`.
+El repositorio se publica bajo GPL-3.0-or-later. La arquitectura del bridge fue contrastada con el add-on MCP de Blender Lab 1.0.0 aportado como referencia, pero la implementación V0 del bridge fue escrita específicamente para este repositorio. Consulta `THIRD_PARTY_NOTICES.md`.
