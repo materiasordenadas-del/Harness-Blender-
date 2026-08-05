@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "harness-blender": {
+      "command": "harness-blender",
+      "env": {
+        "BLENDER_HOST": "127.0.0.1",
+        "BLENDER_PORT": "9876",
+        "BLENDER_TIMEOUT": "180",
+        "BLENDER_TOKEN": "harness-v0-local"
+      }
+    }
+  }
+}
