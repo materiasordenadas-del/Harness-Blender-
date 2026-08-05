@@ -1,0 +1,19 @@
+schema_version = "1.0.0"
+
+id = "harness_blender_bridge"
+version = "0.1.0"
+name = "Harness Blender Bridge"
+tagline = "Local bridge for model-agnostic Blender agents"
+maintainer = "materiasordenadas-del"
+type = "add-on"
+website = "https://github.com/materiasordenadas-del/Harness-Blender-"
+blender_version_min = "5.1.0"
+
+license = [
+  "SPDX:GPL-3.0-or-later",
+]
+
+tags = ["Development"]
+
+[permissions]
+network = "Runs a local TCP socket server for MCP client communication"
