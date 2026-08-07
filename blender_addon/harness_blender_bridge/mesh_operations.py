@@ -302,3 +302,91 @@ def bridge_edge_loops(params: dict[str, Any]) -> dict[str, Any]:
         bm.free()
     _record_undo("bridge edge loops", lambda: _restore_topology(obj.data, snapshot))
     return {"object_name": obj.name, "faces_created": len(result["faces"]), "faces": len(obj.data.polygons)}
+
+
+def fill_hole(params: dict[str, Any]) -> dict[str, Any]:
+    obj = _mesh_object(params["object_name"])
+    snapshot = _topology_snapshot(obj.data)
+    bm = bmesh.new()
+    try:
+        bm.from_mesh(obj.data)
+        bm.edges.ensure_lookup_table()
+        indices = params["boundary_edge_indices"]
+        if any(index >= len(bm.edges) for index in indices):
+            raise IndexError("boundary edge index out of range")
+        result = bmesh.ops.holes_fill(bm, edges=[bm.edges[index] for index in indices], sides=0)
+        if not result.get("faces"):
+            raise ValueError("Selected edges do not form a fillable boundary")
+        face_count = len(result["faces"])
+        bm.to_mesh(obj.data)
+        obj.data.update()
+    finally:
+        bm.free()
+    _record_undo("fill mesh hole", lambda: _restore_topology(obj.data, snapshot))
+    return {"object_name": obj.name, "faces_created": face_count, "faces": len(obj.data.polygons)}
+
+
+def boolean_operation(params: dict[str, Any], operation: str) -> dict[str, Any]:
+    obj = _mesh_object(params["object_name"])
+    target = _mesh_object(params["target_object_name"])
+    if obj == target:
+        raise ValueError("Boolean target must be a different object")
+    snapshot = _topology_snapshot(obj.data)
+    modifier = obj.modifiers.new("Harness Boolean", "BOOLEAN")
+    modifier.operation = operation
+    modifier.solver = "EXACT"
+    modifier.object = target
+    previous_active = bpy.context.view_layer.objects.active
+    previous_selection = tuple(bpy.context.selected_objects)
+    try:
+        for selected in previous_selection:
+            selected.select_set(False)
+        obj.select_set(True)
+        bpy.context.view_layer.objects.active = obj
+        status = bpy.ops.object.modifier_apply(modifier=modifier.name)
+        if "FINISHED" not in status:
+            raise RuntimeError(f"Blender modifier_apply returned {sorted(status)}")
+    finally:
+        obj.select_set(False)
+        for selected in previous_selection:
+            selected.select_set(True)
+        bpy.context.view_layer.objects.active = previous_active
+    _record_undo("boolean mesh operation", lambda: _restore_topology(obj.data, snapshot))
+    return {"object_name": obj.name, "target_object_name": target.name, "operation": operation, "vertices": len(obj.data.vertices), "faces": len(obj.data.polygons)}
+
+
+def decimate_mesh(params: dict[str, Any]) -> dict[str, Any]:
+    obj = _mesh_object(params["object_name"])
+    snapshot = _topology_snapshot(obj.data)
+    modifier = obj.modifiers.new("Harness Decimate", "DECIMATE")
+    modifier.ratio = params["ratio"]
+    previous_active = bpy.context.view_layer.objects.active
+    try:
+        bpy.context.view_layer.objects.active = obj
+        obj.select_set(True)
+        status = bpy.ops.object.modifier_apply(modifier=modifier.name)
+        if "FINISHED" not in status:
+            raise RuntimeError(f"Blender modifier_apply returned {sorted(status)}")
+    finally:
+        obj.select_set(False)
+        bpy.context.view_layer.objects.active = previous_active
+    _record_undo("decimate mesh", lambda: _restore_topology(obj.data, snapshot))
+    return {"object_name": obj.name, "ratio": params["ratio"], "vertices": len(obj.data.vertices), "faces": len(obj.data.polygons)}
+
+
+def voxel_remesh(params: dict[str, Any]) -> dict[str, Any]:
+    obj = _mesh_object(params["object_name"])
+    snapshot = _topology_snapshot(obj.data)
+    previous_active = bpy.context.view_layer.objects.active
+    try:
+        bpy.context.view_layer.objects.active = obj
+        obj.select_set(True)
+        obj.data.remesh_voxel_size = params["voxel_size"]
+        status = bpy.ops.object.voxel_remesh()
+        if "FINISHED" not in status:
+            raise RuntimeError(f"Blender voxel_remesh returned {sorted(status)}")
+    finally:
+        obj.select_set(False)
+        bpy.context.view_layer.objects.active = previous_active
+    _record_undo("voxel remesh", lambda: _restore_topology(obj.data, snapshot))
+    return {"object_name": obj.name, "voxel_size": params["voxel_size"], "vertices": len(obj.data.vertices), "faces": len(obj.data.polygons)}

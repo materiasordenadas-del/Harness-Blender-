@@ -151,6 +151,42 @@ def bridge_edge_loops(object_name: str, edge_indices: list[int]) -> str:
 
 
 @mcp.tool()
+def fill_hole(object_name: str, boundary_edge_indices: list[int]) -> str:
+    """Fill one closed boundary loop chosen by edge indices, reversibly."""
+    return _run("fill_hole", {"object_name": object_name, "boundary_edge_indices": boundary_edge_indices})
+
+
+@mcp.tool()
+def boolean_union(object_name: str, target_object_name: str) -> str:
+    """Apply an exact Boolean union to one mesh, reversibly."""
+    return _run("boolean_union", {"object_name": object_name, "target_object_name": target_object_name})
+
+
+@mcp.tool()
+def boolean_difference(object_name: str, target_object_name: str) -> str:
+    """Apply an exact Boolean difference to one mesh, reversibly."""
+    return _run("boolean_difference", {"object_name": object_name, "target_object_name": target_object_name})
+
+
+@mcp.tool()
+def boolean_intersection(object_name: str, target_object_name: str) -> str:
+    """Apply an exact Boolean intersection to one mesh, reversibly."""
+    return _run("boolean_intersection", {"object_name": object_name, "target_object_name": target_object_name})
+
+
+@mcp.tool()
+def decimate_mesh(object_name: str, ratio: float) -> str:
+    """Apply Decimate with a ratio from 0.01 to 1, reversibly."""
+    return _run("decimate_mesh", {"object_name": object_name, "ratio": ratio})
+
+
+@mcp.tool()
+def voxel_remesh(object_name: str, voxel_size: float) -> str:
+    """Apply voxel remesh with an explicit, bounded voxel size."""
+    return _run("voxel_remesh", {"object_name": object_name, "voxel_size": voxel_size})
+
+
+@mcp.tool()
 def add_curve_point(object_name: str, spline_index: int, co: list[float]) -> str:
     """Append one editable point to a single-spline curve."""
     return _run("add_curve_point", {"object_name": object_name, "spline_index": spline_index, "co": co})

@@ -34,6 +34,9 @@ ALLOWED_OPERATIONS = {
     "remove_modifier",
     "apply_modifier",
     "merge_vertices", "bridge_edge_loops",
+    "fill_hole",
+    "boolean_union", "boolean_difference", "boolean_intersection",
+    "decimate_mesh", "voxel_remesh",
     "save_blend",
     "undo",
     "capture_screen",
@@ -280,6 +283,21 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         if not isinstance(indices, list) or not minimum <= len(indices) <= 256 or len(set(indices)) != len(indices):
             raise ProtocolError(f"{index_field} must contain {minimum}-256 unique indices")
         return {"object_name": _name(params.get("object_name"), "object_name"), index_field: [_integer(item, index_field, minimum=0, maximum=1_000_000) for item in indices]}
+    if operation == "fill_hole":
+        _reject_unknown_keys(params, {"object_name", "boundary_edge_indices"}, where="fill_hole parameter")
+        indices = params.get("boundary_edge_indices")
+        if not isinstance(indices, list) or not 3 <= len(indices) <= 256 or len(set(indices)) != len(indices):
+            raise ProtocolError("boundary_edge_indices must contain 3-256 unique indices")
+        return {"object_name": _name(params.get("object_name"), "object_name"), "boundary_edge_indices": [_integer(item, "boundary_edge_indices", minimum=0, maximum=1_000_000) for item in indices]}
+    if operation in {"boolean_union", "boolean_difference", "boolean_intersection"}:
+        _reject_unknown_keys(params, {"object_name", "target_object_name"}, where=f"{operation} parameter")
+        return {"object_name": _name(params.get("object_name"), "object_name"), "target_object_name": _name(params.get("target_object_name"), "target_object_name")}
+    if operation == "decimate_mesh":
+        _reject_unknown_keys(params, {"object_name", "ratio"}, where="decimate_mesh parameter")
+        return {"object_name": _name(params.get("object_name"), "object_name"), "ratio": _number(params.get("ratio"), "ratio", minimum=0.01, maximum=1.0)}
+    if operation == "voxel_remesh":
+        _reject_unknown_keys(params, {"object_name", "voxel_size"}, where="voxel_remesh parameter")
+        return {"object_name": _name(params.get("object_name"), "object_name"), "voxel_size": _number(params.get("voxel_size"), "voxel_size", minimum=0.001, maximum=1000.0)}
 
     if operation in {"add_curve_point", "move_curve_point", "remove_curve_point"}:
         allowed = {"object_name", "spline_index", "point_index", "co"}
