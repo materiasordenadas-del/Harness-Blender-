@@ -1,4 +1,4 @@
-"""MCP server exposing the V0 Blender semantic toolset."""
+"""MCP server exposing the Harness Blender V1 semantic toolset."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from mcp.server.fastmcp import FastMCP, Image
 
 from .connection import BlenderConnection
 
-mcp = FastMCP("Harness Blender V0")
+mcp = FastMCP("Harness Blender V1")
 _connection = BlenderConnection()
 
 
@@ -212,7 +212,7 @@ def save_blend(filepath: str | None = None) -> str:
 
 @mcp.tool()
 def undo_last_action() -> str:
-    """Revert the most recent reversible Harness Blender V0 operation."""
+    """Revert the most recent reversible Harness Blender operation."""
     return _run("undo")
 
 
@@ -232,16 +232,32 @@ def capture_blender_screen() -> Image:
     return Image(data=data, format="png")
 
 
-@mcp.resource("harness://v0/capabilities")
+@mcp.resource("harness://v1/capabilities")
 def capabilities() -> str:
-    """Describe the exact limits of V0 so the agent does not invent tools."""
+    """Describe the exact limits of V1 so the agent does not invent tools."""
     payload: dict[str, Any] = {
-        "version": "0.1.0",
+        "version": "0.2.0-v1-curves",
         "transport": "typed operation + validated params; no Python source over socket",
         "tools": [
             "blender_ping",
             "inspect_scene",
             "inspect_object",
+            "create_curve",
+            "inspect_curve",
+            "add_curve_point",
+            "move_curve_point",
+            "remove_curve_point",
+            "set_curve_handle_type",
+            "set_curve_handle_position",
+            "set_curve_point_radius",
+            "set_curve_point_tilt",
+            "set_curve_bevel_depth",
+            "set_curve_bevel_resolution",
+            "set_curve_resolution",
+            "set_curve_cyclic",
+            "subdivide_curve",
+            "resample_curve",
+            "convert_curve_to_mesh",
             "create_primitive",
             "transform_object",
             "delete_object",
