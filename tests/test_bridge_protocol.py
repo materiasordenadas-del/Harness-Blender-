@@ -1,0 +1,106 @@
+from __future__ import annotations
+
+import importlib.util
+from pathlib import Path
+
+import pytest
+
+MODULE_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "blender_addon"
+    / "harness_blender_bridge"
+    / "bridge_protocol.py"
+)
+spec = importlib.util.spec_from_file_location("harness_bridge_protocol", MODULE_PATH)
+assert spec and spec.loader
+bridge_protocol = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(bridge_protocol)
+
+TOKEN = "a" * 43
+
+
+def request(operation: str, params=None, **extra):
+    payload = {
+        "type": "operation",
+        "operation": operation,
+        "params": params or {},
+        "token": TOKEN,
+    }
+    payload.update(extra)
+    return payload
+
+
+def test_wrong_token_is_rejected():
+    payload = request("ping")
+    payload["token"] = "wrong-token"
+    with pytest.raises(bridge_protocol.AuthenticationError):
+        bridge_protocol.parse_operation_request(payload, TOKEN)
+
+
+def test_arbitrary_code_field_is_rejected_even_with_valid_token():
+    payload = request("ping", code="import os; os.remove('anything')")
+    with pytest.raises(bridge_protocol.ProtocolError, match="Unknown request field"):
+        bridge_protocol.parse_operation_request(payload, TOKEN)
+
+
+def test_unknown_operation_is_rejected():
+    with pytest.raises(bridge_protocol.ProtocolError, match="not allowed"):
+        bridge_protocol.parse_operation_request(request("execute_python"), TOKEN)
+
+
+def test_create_primitive_is_normalized():
+    operation, params = bridge_protocol.parse_operation_request(
+        request("create_primitive", {"primitive": "cube", "name": "SafeCube"}),
+        TOKEN,
+    )
+    assert operation == "create_primitive"
+    assert params["location"] == [0.0, 0.0, 0.0]
+    assert params["scale"] == [1.0, 1.0, 1.0]
+
+
+@pytest.mark.parametrize(
+    "bad_vector",
+    ([1, 2], [1, 2, 3, 4], [1, float("inf"), 3], [1, True, 3], [1e20, 0, 0]),
+)
+def test_vector_limits_are_enforced(bad_vector):
+    with pytest.raises(bridge_protocol.ProtocolError):
+        bridge_protocol.parse_operation_request(
+            request(
+                "create_primitive",
+                {"primitive": "cube", "name": "Cube", "location": bad_vector},
+            ),
+            TOKEN,
+        )
+
+
+def test_transform_requires_a_transform_field():
+    with pytest.raises(bridge_protocol.ProtocolError, match="at least one"):
+        bridge_protocol.parse_operation_request(
+            request("transform_object", {"object_name": "Cube"}), TOKEN
+        )
+
+
+def test_unknown_operation_parameter_is_rejected():
+    with pytest.raises(bridge_protocol.ProtocolError, match="Unknown create_primitive parameter"):
+        bridge_protocol.parse_operation_request(
+            request(
+                "create_primitive",
+                {"primitive": "cube", "name": "Cube", "shell_command": "whoami"},
+            ),
+            TOKEN,
+        )
+
+
+def test_save_requires_absolute_blend_path():
+    with pytest.raises(bridge_protocol.ProtocolError, match="absolute"):
+        bridge_protocol.parse_operation_request(
+            request("save_blend", {"filepath": "relative/test.blend"}), TOKEN
+        )
+
+
+def test_all_declared_operations_have_validation_paths():
+    simple = {"ping", "inspect_scene", "undo", "capture_screen"}
+    for operation in simple:
+        parsed, params = bridge_protocol.parse_operation_request(request(operation), TOKEN)
+        assert parsed == operation
+        assert params == {}
