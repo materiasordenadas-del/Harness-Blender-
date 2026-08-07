@@ -4,13 +4,31 @@
 from __future__ import annotations
 
 import base64
+from contextlib import contextmanager
+from dataclasses import dataclass
 import math
 import tempfile
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 
 import bmesh
 import bpy
+
+
+@dataclass
+class _UndoAction:
+    label: str
+    restore: Callable[[], None]
+
+
+_UNDO_STACK: list[_UndoAction] = []
+_MAX_UNDO_ACTIONS = 20
+
+
+def _record_undo(label: str, restore: Callable[[], None]) -> None:
+    _UNDO_STACK.append(_UndoAction(label=label, restore=restore))
+    if len(_UNDO_STACK) > _MAX_UNDO_ACTIONS:
+        del _UNDO_STACK[0]
 
 
 def _object(name: str) -> bpy.types.Object:
@@ -18,6 +36,34 @@ def _object(name: str) -> bpy.types.Object:
     if obj is None:
         raise ValueError(f"Object not found: {name}")
     return obj
+
+
+@contextmanager
+def _operator_context() -> Iterator[None]:
+    """Provide a VIEW_3D context for operators called by the bridge timer."""
+    if bpy.app.background:
+        yield
+        return
+
+    for window in bpy.context.window_manager.windows:
+        screen = window.screen
+        for area in screen.areas:
+            if area.type != "VIEW_3D":
+                continue
+            region = next((item for item in area.regions if item.type == "WINDOW"), None)
+            if region is None:
+                continue
+            with bpy.context.temp_override(
+                window=window,
+                screen=screen,
+                area=area,
+                region=region,
+                scene=window.scene,
+                view_layer=window.view_layer,
+            ):
+                yield
+                return
+    raise RuntimeError("A Blender VIEW_3D window is required for this operation")
 
 
 def _op_ping(_params: dict[str, Any]) -> dict[str, Any]:
@@ -94,27 +140,35 @@ def _op_create_primitive(params: dict[str, Any]) -> dict[str, Any]:
 
     primitive = params["primitive"]
     location = tuple(params["location"])
-    if primitive == "cube":
-        status = bpy.ops.mesh.primitive_cube_add(location=location)
-    elif primitive == "uv_sphere":
-        status = bpy.ops.mesh.primitive_uv_sphere_add(location=location)
-    elif primitive == "cylinder":
-        status = bpy.ops.mesh.primitive_cylinder_add(location=location)
-    elif primitive == "cone":
-        status = bpy.ops.mesh.primitive_cone_add(location=location)
-    elif primitive == "torus":
-        status = bpy.ops.mesh.primitive_torus_add(location=location)
-    else:  # bridge_protocol should make this unreachable
-        raise ValueError(f"Unsupported primitive: {primitive}")
-    if "FINISHED" not in status:
-        raise RuntimeError(f"Blender primitive operator returned {sorted(status)}")
+    with _operator_context():
+        if primitive == "cube":
+            status = bpy.ops.mesh.primitive_cube_add(location=location)
+        elif primitive == "uv_sphere":
+            status = bpy.ops.mesh.primitive_uv_sphere_add(location=location)
+        elif primitive == "cylinder":
+            status = bpy.ops.mesh.primitive_cylinder_add(location=location)
+        elif primitive == "cone":
+            status = bpy.ops.mesh.primitive_cone_add(location=location)
+        elif primitive == "torus":
+            status = bpy.ops.mesh.primitive_torus_add(location=location)
+        else:  # bridge_protocol should make this unreachable
+            raise ValueError(f"Unsupported primitive: {primitive}")
+        if "FINISHED" not in status:
+            raise RuntimeError(f"Blender primitive operator returned {sorted(status)}")
+        obj = bpy.context.view_layer.objects.active
+        if obj is None:
+            raise RuntimeError("Blender did not create an active object")
+        obj.name = name
+        obj.scale = tuple(params["scale"])
+        bpy.context.view_layer.update()
+    created_name = obj.name
 
-    obj = bpy.context.active_object
-    if obj is None:
-        raise RuntimeError("Blender did not create an active object")
-    obj.name = name
-    obj.scale = tuple(params["scale"])
-    bpy.context.view_layer.update()
+    def restore() -> None:
+        created = bpy.data.objects.get(created_name)
+        if created is not None:
+            bpy.data.objects.remove(created, do_unlink=True)
+
+    _record_undo(f"create {created_name}", restore)
     return {
         "name": obj.name,
         "type": obj.type,
@@ -126,10 +180,9 @@ def _op_create_primitive(params: dict[str, Any]) -> dict[str, Any]:
 
 def _op_transform_object(params: dict[str, Any]) -> dict[str, Any]:
     obj = _object(params["object_name"])
-    # Direct RNA assignments are not operators, so explicitly snapshot an undo
-    # state before applying them. This keeps undo_last_action useful for V0.
-    if bpy.ops.ed.undo_push.poll():
-        bpy.ops.ed.undo_push(message=f"Harness Blender transform {obj.name}")
+    previous_location = tuple(obj.location)
+    previous_rotation = tuple(obj.rotation_euler)
+    previous_scale = tuple(obj.scale)
     if "location" in params:
         obj.location = tuple(params["location"])
     if "rotation_degrees" in params:
@@ -137,6 +190,17 @@ def _op_transform_object(params: dict[str, Any]) -> dict[str, Any]:
     if "scale" in params:
         obj.scale = tuple(params["scale"])
     bpy.context.view_layer.update()
+
+    def restore() -> None:
+        current = bpy.data.objects.get(obj.name)
+        if current is None:
+            return
+        current.location = previous_location
+        current.rotation_euler = previous_rotation
+        current.scale = previous_scale
+        bpy.context.view_layer.update()
+
+    _record_undo(f"transform {obj.name}", restore)
     return {
         "name": obj.name,
         "location": list(obj.location),
@@ -148,14 +212,26 @@ def _op_transform_object(params: dict[str, Any]) -> dict[str, Any]:
 
 def _op_delete_object(params: dict[str, Any]) -> dict[str, Any]:
     obj = _object(params["object_name"])
-    if bpy.context.mode != "OBJECT" and bpy.ops.object.mode_set.poll():
-        bpy.ops.object.mode_set(mode="OBJECT")
-    bpy.ops.object.select_all(action="DESELECT")
-    obj.select_set(True)
-    bpy.context.view_layer.objects.active = obj
-    status = bpy.ops.object.delete(use_global=False, confirm=False)
-    if "FINISHED" not in status:
-        raise RuntimeError(f"Blender delete operator returned {sorted(status)}")
+    original_name = obj.name
+    snapshot = obj.copy()
+    if obj.data is not None and hasattr(obj.data, "copy"):
+        snapshot.data = obj.data.copy()
+    collections = tuple(obj.users_collection)
+    parent = obj.parent
+    parent_inverse = obj.matrix_parent_inverse.copy()
+    bpy.data.objects.remove(obj, do_unlink=True)
+
+    def restore() -> None:
+        snapshot.name = original_name
+        for collection in collections:
+            collection.objects.link(snapshot)
+        if not collections:
+            bpy.context.scene.collection.objects.link(snapshot)
+        snapshot.parent = parent
+        snapshot.matrix_parent_inverse = parent_inverse
+        bpy.context.view_layer.update()
+
+    _record_undo(f"delete {snapshot.name}", restore)
     return {"deleted": params["object_name"], "undoable": True}
 
 
@@ -209,12 +285,11 @@ def _op_save_blend(params: dict[str, Any]) -> dict[str, Any]:
 
 
 def _op_undo(_params: dict[str, Any]) -> dict[str, Any]:
-    if not bpy.ops.ed.undo.poll():
-        raise RuntimeError("Blender undo is not available in the current context")
-    status = bpy.ops.ed.undo()
-    if "FINISHED" not in status:
-        raise RuntimeError(f"Blender undo operator returned {sorted(status)}")
-    return {"status": sorted(status)}
+    if not _UNDO_STACK:
+        raise RuntimeError("Harness Blender has no reversible V0 action to undo")
+    action = _UNDO_STACK.pop()
+    action.restore()
+    return {"status": ["FINISHED"], "undone": action.label}
 
 
 def _op_capture_screen(_params: dict[str, Any]) -> dict[str, Any]:

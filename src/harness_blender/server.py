@@ -90,7 +90,7 @@ def save_blend(filepath: str | None = None) -> str:
 
 @mcp.tool()
 def undo_last_action() -> str:
-    """Ask Blender to undo the most recent undoable operation."""
+    """Revert the most recent reversible Harness Blender V0 operation."""
     return _run("undo")
 
 
