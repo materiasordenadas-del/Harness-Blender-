@@ -73,3 +73,48 @@ def recalculate_normals(params: dict[str, Any]) -> dict[str, Any]:
         bm.free()
     _record_undo("recalculate mesh normals", lambda: _restore_topology(obj.data, snapshot))
     return {"name": obj.name, "orientation": "outside" if params["outward"] else "inside"}
+
+
+def flip_normals(params: dict[str, Any]) -> dict[str, Any]:
+    obj = _mesh_object(params["object_name"])
+    snapshot = _topology_snapshot(obj.data)
+    bm = bmesh.new()
+    try:
+        bm.from_mesh(obj.data)
+        bmesh.ops.reverse_faces(bm, faces=list(bm.faces))
+        bm.to_mesh(obj.data)
+        obj.data.update()
+    finally:
+        bm.free()
+    _record_undo("flip mesh normals", lambda: _restore_topology(obj.data, snapshot))
+    return {"name": obj.name, "faces": len(obj.data.polygons), "orientation": "flipped"}
+
+
+def subdivide_mesh(params: dict[str, Any]) -> dict[str, Any]:
+    obj = _mesh_object(params["object_name"])
+    snapshot = _topology_snapshot(obj.data)
+    bm = bmesh.new()
+    try:
+        bm.from_mesh(obj.data)
+        bmesh.ops.subdivide_edges(bm, edges=list(bm.edges), cuts=params["cuts"], use_grid_fill=True)
+        bm.to_mesh(obj.data)
+        obj.data.update()
+    finally:
+        bm.free()
+    _record_undo("subdivide mesh", lambda: _restore_topology(obj.data, snapshot))
+    return {"name": obj.name, "vertices": len(obj.data.vertices), "faces": len(obj.data.polygons), "cuts": params["cuts"]}
+
+
+def smooth_mesh(params: dict[str, Any]) -> dict[str, Any]:
+    obj = _mesh_object(params["object_name"])
+    snapshot = _topology_snapshot(obj.data)
+    bm = bmesh.new()
+    try:
+        bm.from_mesh(obj.data)
+        bmesh.ops.smooth_vert(bm, verts=list(bm.verts), factor=params["factor"], use_axis_x=True, use_axis_y=True, use_axis_z=True)
+        bm.to_mesh(obj.data)
+        obj.data.update()
+    finally:
+        bm.free()
+    _record_undo("smooth mesh", lambda: _restore_topology(obj.data, snapshot))
+    return {"name": obj.name, "vertices": len(obj.data.vertices), "factor": params["factor"]}

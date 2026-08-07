@@ -25,6 +25,9 @@ ALLOWED_OPERATIONS = {
     "validate_mesh",
     "inspect_mesh_detailed",
     "recalculate_normals",
+    "flip_normals",
+    "subdivide_mesh",
+    "smooth_mesh",
     "save_blend",
     "undo",
     "capture_screen",
@@ -203,6 +206,24 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         if "object_name" not in params or not isinstance(params.get("outward", True), bool):
             raise ProtocolError("recalculate_normals requires object_name and boolean outward")
         return {"object_name": _name(params["object_name"], "object_name"), "outward": params.get("outward", True)}
+
+    if operation == "flip_normals":
+        _reject_unknown_keys(params, {"object_name"}, where="flip_normals parameter")
+        if "object_name" not in params:
+            raise ProtocolError("flip_normals requires object_name")
+        return {"object_name": _name(params["object_name"], "object_name")}
+
+    if operation == "subdivide_mesh":
+        _reject_unknown_keys(params, {"object_name", "cuts"}, where="subdivide_mesh parameter")
+        if "object_name" not in params or "cuts" not in params:
+            raise ProtocolError("subdivide_mesh requires object_name and cuts")
+        return {"object_name": _name(params["object_name"], "object_name"), "cuts": _integer(params["cuts"], "cuts", minimum=1, maximum=4)}
+
+    if operation == "smooth_mesh":
+        _reject_unknown_keys(params, {"object_name", "factor"}, where="smooth_mesh parameter")
+        if "object_name" not in params or "factor" not in params:
+            raise ProtocolError("smooth_mesh requires object_name and factor")
+        return {"object_name": _name(params["object_name"], "object_name"), "factor": _number(params["factor"], "factor", minimum=0.0, maximum=1.0)}
 
     if operation in {"add_curve_point", "move_curve_point", "remove_curve_point"}:
         allowed = {"object_name", "spline_index", "point_index", "co"}

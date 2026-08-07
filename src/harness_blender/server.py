@@ -61,6 +61,24 @@ def recalculate_normals(object_name: str, outward: bool = True) -> str:
 
 
 @mcp.tool()
+def flip_normals(object_name: str) -> str:
+    """Invert all mesh face normals reversibly."""
+    return _run("flip_normals", {"object_name": object_name})
+
+
+@mcp.tool()
+def subdivide_mesh(object_name: str, cuts: int) -> str:
+    """Subdivide all mesh edges with 1-4 cuts, reversibly."""
+    return _run("subdivide_mesh", {"object_name": object_name, "cuts": cuts})
+
+
+@mcp.tool()
+def smooth_mesh(object_name: str, factor: float) -> str:
+    """Smooth mesh vertices with a bounded factor from 0 to 1."""
+    return _run("smooth_mesh", {"object_name": object_name, "factor": factor})
+
+
+@mcp.tool()
 def add_curve_point(object_name: str, spline_index: int, co: list[float]) -> str:
     """Append one editable point to a single-spline curve."""
     return _run("add_curve_point", {"object_name": object_name, "spline_index": spline_index, "co": co})
