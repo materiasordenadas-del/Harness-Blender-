@@ -26,6 +26,8 @@ ALLOWED_OPERATIONS = {
     "save_blend",
     "undo",
     "capture_screen",
+    "create_curve",
+    "inspect_curve",
 }
 MAX_NAME_LENGTH = 255
 MAX_ABS_COORDINATE = 1_000_000.0
@@ -134,6 +136,24 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         if not filepath.lower().endswith(".blend"):
             raise ProtocolError("filepath must end in .blend")
         return {"filepath": filepath}
+
+    if operation == "create_curve":
+        _reject_unknown_keys(params, {"name", "spline_type", "points"}, where="create_curve parameter")
+        if not all(key in params for key in ("name", "spline_type", "points")):
+            raise ProtocolError("create_curve requires name, spline_type and points")
+        if params["spline_type"] not in {"BEZIER", "NURBS", "POLY"}:
+            raise ProtocolError("spline_type must be BEZIER, NURBS or POLY")
+        points = params["points"]
+        if not isinstance(points, list) or not 2 <= len(points) <= 256:
+            raise ProtocolError("points must contain 2-256 coordinates")
+        return {"name": _name(params["name"], "name"), "spline_type": params["spline_type"],
+                "points": [_vec3(point, "points item") for point in points]}
+
+    if operation == "inspect_curve":
+        _reject_unknown_keys(params, {"object_name"}, where="inspect_curve parameter")
+        if "object_name" not in params:
+            raise ProtocolError("inspect_curve requires object_name")
+        return {"object_name": _name(params["object_name"], "object_name")}
 
     raise ProtocolError(f"Unhandled V0 operation: {operation}")
 

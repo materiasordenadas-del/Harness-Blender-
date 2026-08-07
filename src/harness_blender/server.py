@@ -37,6 +37,18 @@ def inspect_object(object_name: str) -> str:
 
 
 @mcp.tool()
+def create_curve(name: str, spline_type: str, points: list[list[float]]) -> str:
+    """Create an editable 3D Bézier, NURBS or Poly curve from 2-256 points."""
+    return _run("create_curve", {"name": name, "spline_type": spline_type, "points": points})
+
+
+@mcp.tool()
+def inspect_curve(object_name: str) -> str:
+    """Inspect an editable curve, including splines, points, handles, radius and bevel."""
+    return _run("inspect_curve", {"object_name": object_name})
+
+
+@mcp.tool()
 def create_primitive(
     primitive: str,
     name: str,
