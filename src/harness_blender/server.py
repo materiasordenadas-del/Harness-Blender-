@@ -139,6 +139,18 @@ def apply_modifier(object_name: str, modifier_name: str) -> str:
 
 
 @mcp.tool()
+def merge_vertices(object_name: str, vertex_indices: list[int]) -> str:
+    """Merge 2-256 vertices at their shared center, reversibly."""
+    return _run("merge_vertices", {"object_name": object_name, "vertex_indices": vertex_indices})
+
+
+@mcp.tool()
+def bridge_edge_loops(object_name: str, edge_indices: list[int]) -> str:
+    """Bridge two compatible boundary loops selected by their edge indices."""
+    return _run("bridge_edge_loops", {"object_name": object_name, "edge_indices": edge_indices})
+
+
+@mcp.tool()
 def add_curve_point(object_name: str, spline_index: int, co: list[float]) -> str:
     """Append one editable point to a single-spline curve."""
     return _run("add_curve_point", {"object_name": object_name, "spline_index": spline_index, "co": co})

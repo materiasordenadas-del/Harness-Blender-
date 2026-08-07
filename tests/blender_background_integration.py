@@ -166,6 +166,28 @@ def main() -> None:
     assert_close([spline["points"][1]["radius"]], [0.4])
     assert_close([spline["points"][1]["tilt"]], [0.25])
 
+    bpy.ops.mesh.primitive_cube_add()
+    merge_mesh = bpy.context.object
+    merge_mesh.name = "V2_Merge_Test"
+    original_vertex_count = len(merge_mesh.data.vertices)
+    dispatch_operation("merge_vertices", {"object_name": merge_mesh.name, "vertex_indices": [0, 1]})
+    assert len(merge_mesh.data.vertices) == original_vertex_count - 1
+    dispatch_operation("undo", {})
+    assert len(merge_mesh.data.vertices) == original_vertex_count
+
+    loop_data = bpy.data.meshes.new("V2_Bridge_Test")
+    loop_data.from_pydata(
+        [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0), (0, 0, 1), (1, 0, 1), (1, 1, 1), (0, 1, 1)],
+        [(0, 1), (1, 2), (2, 3), (3, 0), (4, 5), (5, 6), (6, 7), (7, 4)],
+        [],
+    )
+    loop_object = bpy.data.objects.new("V2_Bridge_Test", loop_data)
+    bpy.context.scene.collection.objects.link(loop_object)
+    bridged = dispatch_operation("bridge_edge_loops", {"object_name": loop_object.name, "edge_indices": list(range(8))})
+    assert bridged["faces_created"] == 4
+    dispatch_operation("undo", {})
+    assert len(loop_data.polygons) == 0
+
     print("HARNESS_BLENDER_BACKGROUND_INTEGRATION_OK")
 
 

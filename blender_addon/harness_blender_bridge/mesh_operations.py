@@ -7,6 +7,7 @@ from typing import Any
 
 import bmesh
 import bpy
+from mathutils import Vector
 
 from .operations import _record_undo
 
@@ -21,6 +22,7 @@ def _mesh_object(name: str) -> bpy.types.Object:
 def _topology_snapshot(mesh: bpy.types.Mesh) -> dict[str, Any]:
     return {
         "vertices": [tuple(vertex.co) for vertex in mesh.vertices],
+        "edges": [tuple(edge.vertices) for edge in mesh.edges],
         "faces": [tuple(polygon.vertices) for polygon in mesh.polygons],
         "materials": [polygon.material_index for polygon in mesh.polygons],
         "smooth": [polygon.use_smooth for polygon in mesh.polygons],
@@ -29,7 +31,7 @@ def _topology_snapshot(mesh: bpy.types.Mesh) -> dict[str, Any]:
 
 def _restore_topology(mesh: bpy.types.Mesh, snapshot: dict[str, Any]) -> None:
     mesh.clear_geometry()
-    mesh.from_pydata(snapshot["vertices"], [], snapshot["faces"])
+    mesh.from_pydata(snapshot["vertices"], snapshot["edges"], snapshot["faces"])
     for polygon, material, smooth in zip(mesh.polygons, snapshot["materials"], snapshot["smooth"]):
         polygon.material_index, polygon.use_smooth = material, smooth
     mesh.update()
@@ -258,3 +260,45 @@ def apply_modifier(params: dict[str, Any]) -> dict[str, Any]:
 
     _record_undo("apply modifier", restore)
     return {"object_name": obj.name, "applied": state["name"], "modifier_type": state["type"], "vertices": len(obj.data.vertices), "faces": len(obj.data.polygons)}
+
+
+def merge_vertices(params: dict[str, Any]) -> dict[str, Any]:
+    obj = _mesh_object(params["object_name"])
+    snapshot = _topology_snapshot(obj.data)
+    bm = bmesh.new()
+    try:
+        bm.from_mesh(obj.data)
+        bm.verts.ensure_lookup_table()
+        indices = params["vertex_indices"]
+        if any(index >= len(bm.verts) for index in indices):
+            raise IndexError("vertex index out of range")
+        vertices = [bm.verts[index] for index in indices]
+        center = sum((vertex.co for vertex in vertices), Vector()) / len(vertices)
+        bmesh.ops.pointmerge(bm, verts=vertices, merge_co=center)
+        bm.to_mesh(obj.data)
+        obj.data.update()
+    finally:
+        bm.free()
+    _record_undo("merge vertices", lambda: _restore_topology(obj.data, snapshot))
+    return {"object_name": obj.name, "merged_vertices": len(params["vertex_indices"]), "vertices": len(obj.data.vertices)}
+
+
+def bridge_edge_loops(params: dict[str, Any]) -> dict[str, Any]:
+    obj = _mesh_object(params["object_name"])
+    snapshot = _topology_snapshot(obj.data)
+    bm = bmesh.new()
+    try:
+        bm.from_mesh(obj.data)
+        bm.edges.ensure_lookup_table()
+        indices = params["edge_indices"]
+        if any(index >= len(bm.edges) for index in indices):
+            raise IndexError("edge index out of range")
+        result = bmesh.ops.bridge_loops(bm, edges=[bm.edges[index] for index in indices])
+        if not result.get("faces"):
+            raise ValueError("Selected edges do not form two bridgeable loops")
+        bm.to_mesh(obj.data)
+        obj.data.update()
+    finally:
+        bm.free()
+    _record_undo("bridge edge loops", lambda: _restore_topology(obj.data, snapshot))
+    return {"object_name": obj.name, "faces_created": len(result["faces"]), "faces": len(obj.data.polygons)}

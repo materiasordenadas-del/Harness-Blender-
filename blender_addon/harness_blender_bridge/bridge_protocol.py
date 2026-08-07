@@ -33,6 +33,7 @@ ALLOWED_OPERATIONS = {
     "set_modifier_parameter",
     "remove_modifier",
     "apply_modifier",
+    "merge_vertices", "bridge_edge_loops",
     "save_blend",
     "undo",
     "capture_screen",
@@ -271,6 +272,14 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
     if operation == "apply_modifier":
         _reject_unknown_keys(params, {"object_name", "modifier_name"}, where="apply_modifier parameter")
         return {"object_name": _name(params.get("object_name"), "object_name"), "modifier_name": _name(params.get("modifier_name"), "modifier_name")}
+    if operation in {"merge_vertices", "bridge_edge_loops"}:
+        index_field = "vertex_indices" if operation == "merge_vertices" else "edge_indices"
+        _reject_unknown_keys(params, {"object_name", index_field}, where=f"{operation} parameter")
+        indices = params.get(index_field)
+        minimum = 2 if operation == "merge_vertices" else 6
+        if not isinstance(indices, list) or not minimum <= len(indices) <= 256 or len(set(indices)) != len(indices):
+            raise ProtocolError(f"{index_field} must contain {minimum}-256 unique indices")
+        return {"object_name": _name(params.get("object_name"), "object_name"), index_field: [_integer(item, index_field, minimum=0, maximum=1_000_000) for item in indices]}
 
     if operation in {"add_curve_point", "move_curve_point", "remove_curve_point"}:
         allowed = {"object_name", "spline_index", "point_index", "co"}
