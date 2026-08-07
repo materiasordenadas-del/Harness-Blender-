@@ -78,3 +78,29 @@ def test_curve_point_editing_is_normalized():
     assert added["co"] == [1.0, 2.0, 3.0]
     assert moved["co"] == [3.0, 2.0, 1.0]
     assert removed["point_index"] == 2
+
+
+def test_bezier_handle_editing_is_normalized():
+    _, handle_type = parse(
+        "set_curve_handle_type",
+        {"object_name": "Aorta", "spline_index": 0, "point_index": 1, "side": "left", "handle_type": "FREE"},
+    )
+    _, position = parse(
+        "set_curve_handle_position",
+        {"object_name": "Aorta", "spline_index": 0, "point_index": 1, "side": "right", "co": [2, 3, 4]},
+    )
+    assert handle_type["handle_type"] == "FREE"
+    assert position["co"] == [2.0, 3.0, 4.0]
+
+
+@pytest.mark.parametrize(
+    ("operation", "params"),
+    [
+        ("set_curve_handle_type", {"object_name": "Aorta", "spline_index": 0, "point_index": 1, "side": "up", "handle_type": "FREE"}),
+        ("set_curve_handle_type", {"object_name": "Aorta", "spline_index": 0, "point_index": 1, "side": "left", "handle_type": "BROKEN"}),
+        ("set_curve_handle_position", {"object_name": "Aorta", "spline_index": 0, "point_index": 1, "side": "left", "co": [1, 2]}),
+    ],
+)
+def test_bezier_handle_invalid_values_are_rejected(operation, params):
+    with pytest.raises(bridge_protocol.ProtocolError):
+        parse(operation, params)

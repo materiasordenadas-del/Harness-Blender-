@@ -90,6 +90,16 @@ def main() -> None:
         },
     )
     assert curve == {"name": "V1_Background_Curve", "type": "CURVE", "spline_type": "BEZIER", "point_count": 3}
+    changed_handle_type = dispatch_operation(
+        "set_curve_handle_type",
+        {"object_name": "V1_Background_Curve", "spline_index": 0, "point_index": 1, "side": "right", "handle_type": "FREE"},
+    )
+    assert changed_handle_type == {"side": "right", "handle_type": "FREE"}
+    changed_handle_position = dispatch_operation(
+        "set_curve_handle_position",
+        {"object_name": "V1_Background_Curve", "spline_index": 0, "point_index": 1, "side": "right", "co": [1.5, 0.5, 0.5]},
+    )
+    assert_close(changed_handle_position["co"], [1.5, 0.5, 0.5])
     added = dispatch_operation(
         "add_curve_point",
         {"object_name": "V1_Background_Curve", "spline_index": 0, "co": [3.0, 1.0, 0.0]},

@@ -71,6 +71,28 @@ def remove_curve_point(object_name: str, spline_index: int, point_index: int) ->
 
 
 @mcp.tool()
+def set_curve_handle_type(
+    object_name: str, spline_index: int, point_index: int, side: str, handle_type: str
+) -> str:
+    """Set one Bézier handle type: AUTO, ALIGNED, FREE or VECTOR."""
+    return _run("set_curve_handle_type", {
+        "object_name": object_name, "spline_index": spline_index, "point_index": point_index,
+        "side": side, "handle_type": handle_type,
+    })
+
+
+@mcp.tool()
+def set_curve_handle_position(
+    object_name: str, spline_index: int, point_index: int, side: str, co: list[float]
+) -> str:
+    """Set the position of one Bézier handle in object-local coordinates."""
+    return _run("set_curve_handle_position", {
+        "object_name": object_name, "spline_index": spline_index, "point_index": point_index,
+        "side": side, "co": co,
+    })
+
+
+@mcp.tool()
 def set_curve_point_radius(object_name: str, spline_index: int, point_index: int, radius: float) -> str:
     """Set the taper radius of one editable curve point."""
     return _run("set_curve_point_radius", {

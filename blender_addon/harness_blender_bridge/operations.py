@@ -325,6 +325,8 @@ OPERATIONS: dict[str, Operation] = {
     "add_curve_point": curve_operations.add_point,
     "move_curve_point": curve_operations.move_point,
     "remove_curve_point": curve_operations.remove_point,
+    "set_curve_handle_type": curve_operations.set_handle_type,
+    "set_curve_handle_position": curve_operations.set_handle_position,
     "set_curve_point_radius": lambda params: curve_operations.set_point_profile(params, "radius"),
     "set_curve_point_tilt": lambda params: curve_operations.set_point_profile(params, "tilt"),
     "set_curve_bevel_depth": lambda params: curve_operations.set_curve_property(params, "bevel_depth"),

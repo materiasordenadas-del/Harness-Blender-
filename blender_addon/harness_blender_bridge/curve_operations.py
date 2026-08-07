@@ -196,6 +196,39 @@ def remove_point(params: dict[str, Any]) -> dict[str, Any]:
     return {"removed_index": index, "point_count": len(new_state["points"])}
 
 
+def _bezier_point(params: dict[str, Any]):
+    spline = _spline(_curve(params["object_name"]), params["spline_index"])
+    if spline.type != "BEZIER":
+        raise TypeError("Bezier handle editing requires a BEZIER spline")
+    return _point(spline, params["point_index"])
+
+
+def set_handle_type(params: dict[str, Any]) -> dict[str, Any]:
+    point = _bezier_point(params)
+    field = f"handle_{params['side']}_type"
+    previous = getattr(point, field)
+    setattr(point, field, params["handle_type"])
+
+    def restore() -> None:
+        setattr(point, field, previous)
+
+    _record_undo("set curve handle type", restore)
+    return {"side": params["side"], "handle_type": getattr(point, field)}
+
+
+def set_handle_position(params: dict[str, Any]) -> dict[str, Any]:
+    point = _bezier_point(params)
+    field = f"handle_{params['side']}"
+    previous = tuple(getattr(point, field))
+    setattr(point, field, params["co"])
+
+    def restore() -> None:
+        setattr(point, field, previous)
+
+    _record_undo("set curve handle position", restore)
+    return {"side": params["side"], "co": [float(v) for v in getattr(point, field)]}
+
+
 def set_point_profile(params: dict[str, Any], field: str) -> dict[str, Any]:
     obj = _curve(params["object_name"])
     point = _point(_spline(obj, params["spline_index"]), params["point_index"])
