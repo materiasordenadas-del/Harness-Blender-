@@ -97,6 +97,12 @@ def set_base_color(material_name: str, base_color: list[float]) -> str:
 
 
 @mcp.tool()
+def add_modifier(object_name: str, name: str, modifier_type: str) -> str:
+    """Add one modifier from the V2 allowlist, reversibly."""
+    return _run("add_modifier", {"object_name": object_name, "name": name, "modifier_type": modifier_type})
+
+
+@mcp.tool()
 def add_curve_point(object_name: str, spline_index: int, co: list[float]) -> str:
     """Append one editable point to a single-spline curve."""
     return _run("add_curve_point", {"object_name": object_name, "spline_index": spline_index, "co": co})

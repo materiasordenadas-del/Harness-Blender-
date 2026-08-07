@@ -329,6 +329,7 @@ OPERATIONS: dict[str, Operation] = {
     "set_roughness": lambda params: mesh_operations.set_material_scalar(params, "Roughness", "roughness"),
     "set_metallic": lambda params: mesh_operations.set_material_scalar(params, "Metallic", "metallic"),
     "set_alpha": lambda params: mesh_operations.set_material_scalar(params, "Alpha", "alpha"),
+    "add_modifier": mesh_operations.add_modifier,
     "save_blend": _op_save_blend,
     "undo": _op_undo,
     "capture_screen": _op_capture_screen,

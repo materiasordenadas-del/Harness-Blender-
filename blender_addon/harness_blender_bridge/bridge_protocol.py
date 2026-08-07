@@ -29,6 +29,7 @@ ALLOWED_OPERATIONS = {
     "subdivide_mesh",
     "smooth_mesh",
     "create_material", "assign_material", "set_base_color", "set_roughness", "set_metallic", "set_alpha",
+    "add_modifier",
     "save_blend",
     "undo",
     "capture_screen",
@@ -242,6 +243,12 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         field = operation.removeprefix("set_")
         _reject_unknown_keys(params, {"material_name", field}, where=f"{operation} parameter")
         return {"material_name": _name(params.get("material_name"), "material_name"), field: _number(params.get(field), field, minimum=0, maximum=1)}
+    if operation == "add_modifier":
+        _reject_unknown_keys(params, {"object_name", "name", "modifier_type"}, where="add_modifier parameter")
+        allowed = {"SUBSURF", "SOLIDIFY", "SHRINKWRAP", "SMOOTH", "LAPLACIANSMOOTH", "DECIMATE", "REMESH", "BOOLEAN"}
+        if params.get("modifier_type") not in allowed:
+            raise ProtocolError("modifier_type is not in the V2 allowlist")
+        return {"object_name": _name(params.get("object_name"), "object_name"), "name": _name(params.get("name"), "name"), "modifier_type": params["modifier_type"]}
 
     if operation in {"add_curve_point", "move_curve_point", "remove_curve_point"}:
         allowed = {"object_name", "spline_index", "point_index", "co"}

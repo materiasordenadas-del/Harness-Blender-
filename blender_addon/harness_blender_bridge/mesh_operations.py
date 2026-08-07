@@ -167,3 +167,13 @@ def set_material_scalar(params: dict[str, Any], input_name: str, response_name: 
     socket.default_value = params[response_name]
     _record_undo("set material value", lambda: setattr(socket, "default_value", previous))
     return {"material_name": params["material_name"], response_name: float(socket.default_value)}
+
+
+def add_modifier(params: dict[str, Any]) -> dict[str, Any]:
+    obj = _mesh_object(params["object_name"])
+    name, modifier_type = params["name"], params["modifier_type"]
+    if obj.modifiers.get(name) is not None:
+        raise ValueError(f"Modifier already exists: {name}")
+    modifier = obj.modifiers.new(name, modifier_type)
+    _record_undo("add modifier", lambda: obj.modifiers.remove(modifier) if modifier.name in obj.modifiers else None)
+    return {"object_name": obj.name, "name": modifier.name, "modifier_type": modifier.type}
