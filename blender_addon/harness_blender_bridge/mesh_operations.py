@@ -118,3 +118,52 @@ def smooth_mesh(params: dict[str, Any]) -> dict[str, Any]:
         bm.free()
     _record_undo("smooth mesh", lambda: _restore_topology(obj.data, snapshot))
     return {"name": obj.name, "vertices": len(obj.data.vertices), "factor": params["factor"]}
+
+
+def _material(name: str) -> bpy.types.Material:
+    material = bpy.data.materials.get(name)
+    if material is None:
+        raise ValueError(f"Material not found: {name}")
+    material.use_nodes = True
+    return material
+
+
+def _principled(material: bpy.types.Material):
+    node = material.node_tree.nodes.get("Principled BSDF") if material.node_tree else None
+    if node is None:
+        raise RuntimeError("Material has no Principled BSDF node")
+    return node
+
+
+def create_material(params: dict[str, Any]) -> dict[str, Any]:
+    name = params["name"]
+    if bpy.data.materials.get(name) is not None:
+        raise ValueError(f"Material already exists: {name}")
+    material = bpy.data.materials.new(name)
+    material.use_nodes = True
+    _record_undo("create material", lambda: bpy.data.materials.remove(material) if material.users == 0 else None)
+    return {"name": material.name}
+
+
+def assign_material(params: dict[str, Any]) -> dict[str, Any]:
+    obj, material = _mesh_object(params["object_name"]), _material(params["material_name"])
+    obj.data.materials.append(material)
+    index = len(obj.data.materials) - 1
+    _record_undo("assign material", lambda: obj.data.materials.pop(index=index))
+    return {"object_name": obj.name, "material_name": material.name, "slot": index}
+
+
+def set_material_value(params: dict[str, Any], input_name: str, response_name: str) -> dict[str, Any]:
+    socket = _principled(_material(params["material_name"])).inputs[input_name]
+    previous = socket.default_value[:]
+    socket.default_value = params[response_name]
+    _record_undo("set material value", lambda: setattr(socket, "default_value", previous))
+    return {"material_name": params["material_name"], response_name: list(socket.default_value)}
+
+
+def set_material_scalar(params: dict[str, Any], input_name: str, response_name: str) -> dict[str, Any]:
+    socket = _principled(_material(params["material_name"])).inputs[input_name]
+    previous = socket.default_value
+    socket.default_value = params[response_name]
+    _record_undo("set material value", lambda: setattr(socket, "default_value", previous))
+    return {"material_name": params["material_name"], response_name: float(socket.default_value)}

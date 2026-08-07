@@ -79,6 +79,24 @@ def smooth_mesh(object_name: str, factor: float) -> str:
 
 
 @mcp.tool()
+def create_material(name: str) -> str:
+    """Create a basic Principled material."""
+    return _run("create_material", {"name": name})
+
+
+@mcp.tool()
+def assign_material(object_name: str, material_name: str) -> str:
+    """Append a material to a mesh object."""
+    return _run("assign_material", {"object_name": object_name, "material_name": material_name})
+
+
+@mcp.tool()
+def set_base_color(material_name: str, base_color: list[float]) -> str:
+    """Set a material RGBA base color, values 0-1."""
+    return _run("set_base_color", {"material_name": material_name, "base_color": base_color})
+
+
+@mcp.tool()
 def add_curve_point(object_name: str, spline_index: int, co: list[float]) -> str:
     """Append one editable point to a single-spline curve."""
     return _run("add_curve_point", {"object_name": object_name, "spline_index": spline_index, "co": co})

@@ -28,6 +28,7 @@ ALLOWED_OPERATIONS = {
     "flip_normals",
     "subdivide_mesh",
     "smooth_mesh",
+    "create_material", "assign_material", "set_base_color", "set_roughness", "set_metallic", "set_alpha",
     "save_blend",
     "undo",
     "capture_screen",
@@ -224,6 +225,23 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         if "object_name" not in params or "factor" not in params:
             raise ProtocolError("smooth_mesh requires object_name and factor")
         return {"object_name": _name(params["object_name"], "object_name"), "factor": _number(params["factor"], "factor", minimum=0.0, maximum=1.0)}
+
+    if operation == "create_material":
+        _reject_unknown_keys(params, {"name"}, where="create_material parameter")
+        return {"name": _name(params.get("name"), "name")}
+    if operation == "assign_material":
+        _reject_unknown_keys(params, {"object_name", "material_name"}, where="assign_material parameter")
+        return {"object_name": _name(params.get("object_name"), "object_name"), "material_name": _name(params.get("material_name"), "material_name")}
+    if operation == "set_base_color":
+        _reject_unknown_keys(params, {"material_name", "base_color"}, where="set_base_color parameter")
+        color = params.get("base_color")
+        if not isinstance(color, list) or len(color) != 4:
+            raise ProtocolError("base_color must contain four numbers")
+        return {"material_name": _name(params.get("material_name"), "material_name"), "base_color": [_number(value, "base_color", minimum=0, maximum=1) for value in color]}
+    if operation in {"set_roughness", "set_metallic", "set_alpha"}:
+        field = operation.removeprefix("set_")
+        _reject_unknown_keys(params, {"material_name", field}, where=f"{operation} parameter")
+        return {"material_name": _name(params.get("material_name"), "material_name"), field: _number(params.get(field), field, minimum=0, maximum=1)}
 
     if operation in {"add_curve_point", "move_curve_point", "remove_curve_point"}:
         allowed = {"object_name", "spline_index", "point_index", "co"}
