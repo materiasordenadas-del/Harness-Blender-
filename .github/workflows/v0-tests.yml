@@ -1,0 +1,27 @@
+name: V0 tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - agent/v0-core
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: python -m pip install -e . pytest
+      - name: Unit tests
+        run: python -m pytest
+      - name: Compile Python sources
+        run: python -m compileall -q src tests scripts blender_addon/harness_blender_bridge
+      - name: Build Blender add-on ZIP
+        run: python scripts/build_addon.py

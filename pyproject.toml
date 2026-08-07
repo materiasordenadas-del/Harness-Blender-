@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "harness-blender"
+version = "0.1.0"
+description = "Model-agnostic MCP harness for safe, structured Blender control"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "GPL-3.0-or-later" }
+authors = [
+  { name = "materiasordenadas-del" }
+]
+dependencies = [
+  "mcp>=1.0.0,<2.0.0",
+]
+
+[project.scripts]
+harness-blender = "harness_blender.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/harness_blender"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-q"
