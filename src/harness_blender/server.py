@@ -132,6 +132,12 @@ def evaluate_tubular(object_name: str, spline_index: int = 0) -> str:
 
 
 @mcp.tool()
+def evaluate_penetration(object_name: str, target_object_name: str) -> str:
+    """Measure intersecting face pairs between two meshes without editing Blender."""
+    return _run("evaluate_penetration", {"object_name": object_name, "target_object_name": target_object_name})
+
+
+@mcp.tool()
 def recalculate_normals(object_name: str, outward: bool = True) -> str:
     """Recalculate all mesh face normals outward or inward."""
     return _run("recalculate_normals", {"object_name": object_name, "outward": outward})
@@ -526,6 +532,26 @@ def v2_capabilities() -> str:
         "not_yet_available": ["arbitrary model-generated Python", "Geometry Nodes authoring", "sculpt operations"],
     }
     return json.dumps(payload, indent=2)
+
+
+@mcp.resource("harness://v4/capabilities")
+def v4_capabilities() -> str:
+    """Describe the read-only V4 evaluation surface."""
+    payload = {
+        "version": "0.5.0-v4-evaluator",
+        "read_only": True,
+        "tools": [
+            "inspect_scene_detailed", "evaluate_mesh", "evaluate_spatial",
+            "evaluate_penetration", "evaluate_tubular", "diff_evaluation_reports",
+        ],
+        "limits": {
+            "spatial_distance": "axis-aligned world bounding boxes",
+            "penetration": "intersecting triangulated mesh surfaces",
+            "tubular": "editable CURVE with bevel_depth",
+        },
+        "not_yet_available": ["automatic correction", "Geometry Nodes authoring", "sculpt operations"],
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
 def main() -> None:

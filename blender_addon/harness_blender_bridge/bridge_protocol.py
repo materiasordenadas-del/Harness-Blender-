@@ -22,6 +22,7 @@ ALLOWED_OPERATIONS = {
     "evaluate_mesh",
     "evaluate_spatial",
     "evaluate_tubular",
+    "evaluate_penetration",
     "inspect_object",
     "create_primitive",
     "transform_object",
@@ -221,6 +222,9 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
     if operation == "evaluate_tubular":
         _reject_unknown_keys(params, {"object_name", "spline_index"}, where="evaluate_tubular parameter")
         return {"object_name": _name(params.get("object_name"), "object_name"), "spline_index": _integer(params.get("spline_index"), "spline_index", minimum=0, maximum=255)}
+    if operation == "evaluate_penetration":
+        _reject_unknown_keys(params, {"object_name", "target_object_name"}, where="evaluate_penetration parameter")
+        return {"object_name": _name(params.get("object_name"), "object_name"), "target_object_name": _name(params.get("target_object_name"), "target_object_name")}
 
     if operation == "recalculate_normals":
         _reject_unknown_keys(params, {"object_name", "outward"}, where="recalculate_normals parameter")

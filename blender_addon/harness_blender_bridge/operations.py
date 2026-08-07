@@ -318,6 +318,7 @@ OPERATIONS: dict[str, Operation] = {
     "evaluate_mesh": evaluator_operations.evaluate_mesh,
     "evaluate_spatial": evaluator_operations.evaluate_spatial,
     "evaluate_tubular": evaluator_operations.evaluate_tubular,
+    "evaluate_penetration": evaluator_operations.evaluate_penetration,
     "inspect_object": _op_inspect_object,
     "create_primitive": _op_create_primitive,
     "transform_object": _op_transform_object,

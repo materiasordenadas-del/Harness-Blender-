@@ -8,6 +8,7 @@ from typing import Any
 import bmesh
 import bpy
 from mathutils import Vector
+from mathutils.bvhtree import BVHTree
 
 
 def inspect_scene_detailed(_params: dict[str, Any]) -> dict[str, Any]:
@@ -42,6 +43,16 @@ def evaluate_mesh(params: dict[str, Any]) -> dict[str, Any]:
         loose_edges = sum(not edge.link_faces for edge in bm.edges)
         non_manifold = sum(not edge.is_manifold and not edge.is_boundary for edge in bm.edges)
         degenerate = sum(face.calc_area() <= 1e-12 for face in bm.faces)
+        bvh = BVHTree.FromBMesh(bm)
+        self_pairs = 0
+        for first, second in bvh.overlap(bvh):
+            if first >= second:
+                continue
+            first_face, second_face = bm.faces[first], bm.faces[second]
+            if not set(first_face.verts).isdisjoint(second_face.verts):
+                continue
+            self_pairs += 1
+        inconsistent_normals = sum(edge.is_manifold and not edge.is_contiguous for edge in bm.edges)
         closed = boundary == 0 and loose_edges == 0 and non_manifold == 0
         coords = [obj.matrix_world @ vertex.co for vertex in bm.verts]
         minimum = [min(point[axis] for point in coords) for axis in range(3)] if coords else [0.0, 0.0, 0.0]
@@ -51,7 +62,8 @@ def evaluate_mesh(params: dict[str, Any]) -> dict[str, Any]:
         return {
             "name": obj.name, "vertices": len(bm.verts), "edges": len(bm.edges), "faces": len(bm.faces),
             "boundary_edges": boundary, "non_manifold_edges": non_manifold, "loose_edges": loose_edges,
-            "degenerate_faces": degenerate, "is_closed_manifold": closed,
+            "degenerate_faces": degenerate, "self_intersections": self_pairs,
+            "inconsistent_normal_edges": inconsistent_normals, "is_closed_manifold": closed,
             "surface_area": float(area), "volume": float(volume) if volume is not None else None,
             "bounding_box": {"min": [float(value) for value in minimum], "max": [float(value) for value in maximum]},
         }
@@ -122,3 +134,21 @@ def evaluate_tubular(params: dict[str, Any]) -> dict[str, Any]:
         "centerline": [[float(value) for value in center] for center in centers],
         "curvature_radians": curvature, "max_curvature_radians": max(curvature) if curvature else 0.0,
     }
+
+
+def evaluate_penetration(params: dict[str, Any]) -> dict[str, Any]:
+    first = bpy.data.objects.get(params["object_name"])
+    second = bpy.data.objects.get(params["target_object_name"])
+    if first is None or second is None or first.type != "MESH" or second.type != "MESH":
+        raise TypeError("evaluate_penetration requires two MESH objects")
+
+    def tree(obj: bpy.types.Object) -> BVHTree:
+        vertices = [obj.matrix_world @ vertex.co for vertex in obj.data.vertices]
+        triangles = []
+        for polygon in obj.data.polygons:
+            indices = tuple(polygon.vertices)
+            triangles.extend((indices[0], indices[index], indices[index + 1]) for index in range(1, len(indices) - 1))
+        return BVHTree.FromPolygons(vertices, triangles, all_triangles=True)
+
+    pairs = tree(first).overlap(tree(second))
+    return {"object_name": first.name, "target_object_name": second.name, "intersecting_face_pairs": len(pairs), "penetrates": bool(pairs)}
