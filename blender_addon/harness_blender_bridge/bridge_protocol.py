@@ -18,6 +18,7 @@ ALLOWED_PRIMITIVES = {"cube", "uv_sphere", "cylinder", "cone", "torus"}
 ALLOWED_OPERATIONS = {
     "ping",
     "inspect_scene",
+    "inspect_scene_detailed",
     "inspect_object",
     "create_primitive",
     "transform_object",
@@ -139,7 +140,7 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
     if not isinstance(params, dict):
         raise ProtocolError("params must be a JSON object")
 
-    if operation in {"ping", "inspect_scene", "undo", "capture_screen"}:
+    if operation in {"ping", "inspect_scene", "inspect_scene_detailed", "undo", "capture_screen"}:
         return _no_params(params, operation)
 
     if operation in {"inspect_object", "delete_object", "validate_mesh", "inspect_mesh_detailed"}:

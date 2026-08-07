@@ -77,6 +77,12 @@ def inspect_scene() -> str:
 
 
 @mcp.tool()
+def inspect_scene_detailed() -> str:
+    """Read hierarchy, collections, modifiers and mesh/curve metrics without editing Blender."""
+    return _run("inspect_scene_detailed")
+
+
+@mcp.tool()
 def inspect_object(object_name: str) -> str:
     """Inspect one object, including transform, mesh counts, modifiers and materials."""
     return _run("inspect_object", {"object_name": object_name})
