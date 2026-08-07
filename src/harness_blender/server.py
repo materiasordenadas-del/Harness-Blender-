@@ -107,6 +107,12 @@ def inspect_mesh_detailed(object_name: str) -> str:
 
 
 @mcp.tool()
+def evaluate_mesh(object_name: str) -> str:
+    """Measure mesh topology, area, volume and world bounding box without editing it."""
+    return _run("evaluate_mesh", {"object_name": object_name})
+
+
+@mcp.tool()
 def recalculate_normals(object_name: str, outward: bool = True) -> str:
     """Recalculate all mesh face normals outward or inward."""
     return _run("recalculate_normals", {"object_name": object_name, "outward": outward})

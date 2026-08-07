@@ -315,6 +315,7 @@ OPERATIONS: dict[str, Operation] = {
     "ping": _op_ping,
     "inspect_scene": _op_inspect_scene,
     "inspect_scene_detailed": evaluator_operations.inspect_scene_detailed,
+    "evaluate_mesh": evaluator_operations.evaluate_mesh,
     "inspect_object": _op_inspect_object,
     "create_primitive": _op_create_primitive,
     "transform_object": _op_transform_object,
