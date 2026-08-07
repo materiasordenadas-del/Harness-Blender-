@@ -15,6 +15,7 @@ import bmesh
 import bpy
 
 
+
 @dataclass
 class _UndoAction:
     label: str
@@ -29,6 +30,9 @@ def _record_undo(label: str, restore: Callable[[], None]) -> None:
     _UNDO_STACK.append(_UndoAction(label=label, restore=restore))
     if len(_UNDO_STACK) > _MAX_UNDO_ACTIONS:
         del _UNDO_STACK[0]
+
+
+from . import curve_operations
 
 
 def _object(name: str) -> bpy.types.Object:
@@ -316,6 +320,14 @@ OPERATIONS: dict[str, Operation] = {
     "save_blend": _op_save_blend,
     "undo": _op_undo,
     "capture_screen": _op_capture_screen,
+    "create_curve": curve_operations.create_curve,
+    "inspect_curve": curve_operations.inspect_curve,
+    "set_curve_point_radius": lambda params: curve_operations.set_point_profile(params, "radius"),
+    "set_curve_point_tilt": lambda params: curve_operations.set_point_profile(params, "tilt"),
+    "set_curve_bevel_depth": lambda params: curve_operations.set_curve_property(params, "bevel_depth"),
+    "set_curve_bevel_resolution": lambda params: curve_operations.set_curve_property(params, "bevel_resolution"),
+    "set_curve_resolution": lambda params: curve_operations.set_spline_property(params, "resolution_u"),
+    "set_curve_cyclic": lambda params: curve_operations.set_spline_property(params, "use_cyclic_u"),
 }
 
 
