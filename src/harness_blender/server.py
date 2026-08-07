@@ -103,6 +103,12 @@ def add_modifier(object_name: str, name: str, modifier_type: str) -> str:
 
 
 @mcp.tool()
+def set_modifier_parameter(object_name: str, modifier_name: str, parameter: str, value: float) -> str:
+    """Set a limited V2 modifier parameter: levels, thickness or ratio."""
+    return _run("set_modifier_parameter", {"object_name": object_name, "modifier_name": modifier_name, "parameter": parameter, "value": value})
+
+
+@mcp.tool()
 def add_curve_point(object_name: str, spline_index: int, co: list[float]) -> str:
     """Append one editable point to a single-spline curve."""
     return _run("add_curve_point", {"object_name": object_name, "spline_index": spline_index, "co": co})

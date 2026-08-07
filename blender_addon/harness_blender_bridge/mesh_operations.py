@@ -177,3 +177,15 @@ def add_modifier(params: dict[str, Any]) -> dict[str, Any]:
     modifier = obj.modifiers.new(name, modifier_type)
     _record_undo("add modifier", lambda: obj.modifiers.remove(modifier) if modifier.name in obj.modifiers else None)
     return {"object_name": obj.name, "name": modifier.name, "modifier_type": modifier.type}
+
+
+def set_modifier_parameter(params: dict[str, Any]) -> dict[str, Any]:
+    obj = _mesh_object(params["object_name"])
+    modifier = obj.modifiers.get(params["modifier_name"])
+    if modifier is None:
+        raise ValueError(f"Modifier not found: {params['modifier_name']}")
+    field, value = params["parameter"], params["value"]
+    previous = getattr(modifier, field)
+    setattr(modifier, field, value)
+    _record_undo("set modifier parameter", lambda: setattr(modifier, field, previous))
+    return {"object_name": obj.name, "modifier_name": modifier.name, "parameter": field, "value": getattr(modifier, field)}
