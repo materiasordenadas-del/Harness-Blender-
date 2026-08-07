@@ -96,3 +96,29 @@ def evaluate_spatial(params: dict[str, Any]) -> dict[str, Any]:
         "distance": float((nearest_second - nearest_first).length),
         "nearest_points": {"object": [float(value) for value in nearest_first], "target": [float(value) for value in nearest_second]},
     }
+
+
+def evaluate_tubular(params: dict[str, Any]) -> dict[str, Any]:
+    obj = bpy.data.objects.get(params["object_name"])
+    if obj is None or obj.type != "CURVE":
+        raise TypeError("evaluate_tubular requires an existing CURVE object")
+    spline = obj.data.splines[params["spline_index"]]
+    points = spline.bezier_points if spline.type == "BEZIER" else spline.points
+    if len(points) < 2:
+        raise ValueError("Tubular evaluation requires at least two points")
+    centers = [Vector(point.co[:3]) for point in points]
+    radii = [float(point.radius) * float(obj.data.bevel_depth) for point in points]
+    diameters = [radius * 2 for radius in radii]
+    jumps = [abs(radii[index + 1] - radii[index]) for index in range(len(radii) - 1)]
+    curvature: list[float] = []
+    for index in range(1, len(centers) - 1):
+        left = centers[index] - centers[index - 1]
+        right = centers[index + 1] - centers[index]
+        curvature.append(float(left.angle(right)) if left.length > 1e-12 and right.length > 1e-12 else 0.0)
+    return {
+        "name": obj.name, "spline_index": params["spline_index"], "point_count": len(points),
+        "radii": radii, "diameters": diameters, "minimum_thickness": min(diameters), "maximum_thickness": max(diameters),
+        "radius_jumps": jumps, "max_radius_jump": max(jumps) if jumps else 0.0,
+        "centerline": [[float(value) for value in center] for center in centers],
+        "curvature_radians": curvature, "max_curvature_radians": max(curvature) if curvature else 0.0,
+    }

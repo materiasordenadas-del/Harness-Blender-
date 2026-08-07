@@ -165,6 +165,9 @@ def main() -> None:
     assert spline["resolution_u"] == 16
     assert_close([spline["points"][1]["radius"]], [0.4])
     assert_close([spline["points"][1]["tilt"]], [0.25])
+    tubular = dispatch_operation("evaluate_tubular", {"object_name": "V1_Background_Curve", "spline_index": 0})
+    assert tubular["point_count"] == 4
+    assert tubular["maximum_thickness"] >= tubular["minimum_thickness"]
 
     bpy.ops.mesh.primitive_cube_add()
     merge_mesh = bpy.context.object

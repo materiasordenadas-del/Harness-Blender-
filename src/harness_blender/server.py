@@ -126,6 +126,12 @@ def evaluate_spatial(object_name: str, target_object_name: str) -> str:
 
 
 @mcp.tool()
+def evaluate_tubular(object_name: str, spline_index: int = 0) -> str:
+    """Measure curve radii, thickness progression, centerline and approximate curvature."""
+    return _run("evaluate_tubular", {"object_name": object_name, "spline_index": spline_index})
+
+
+@mcp.tool()
 def recalculate_normals(object_name: str, outward: bool = True) -> str:
     """Recalculate all mesh face normals outward or inward."""
     return _run("recalculate_normals", {"object_name": object_name, "outward": outward})
