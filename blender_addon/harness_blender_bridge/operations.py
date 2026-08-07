@@ -327,7 +327,9 @@ OPERATIONS: dict[str, Operation] = {
     "set_curve_bevel_depth": lambda params: curve_operations.set_curve_property(params, "bevel_depth"),
     "set_curve_bevel_resolution": lambda params: curve_operations.set_curve_property(params, "bevel_resolution"),
     "set_curve_resolution": lambda params: curve_operations.set_spline_property(params, "resolution_u"),
-    "set_curve_cyclic": lambda params: curve_operations.set_spline_property(params, "use_cyclic_u"),
+    "set_curve_cyclic": lambda params: curve_operations.set_spline_property(
+        params, "use_cyclic_u", param_field="cyclic"
+    ),
 }
 
 

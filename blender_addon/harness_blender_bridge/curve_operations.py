@@ -122,13 +122,14 @@ def set_curve_property(params: dict[str, Any], field: str) -> dict[str, Any]:
     return {field: getattr(obj.data, field)}
 
 
-def set_spline_property(params: dict[str, Any], field: str) -> dict[str, Any]:
+def set_spline_property(params: dict[str, Any], field: str, *, param_field: str | None = None) -> dict[str, Any]:
     spline = _spline(_curve(params["object_name"]), params["spline_index"])
     previous = getattr(spline, field)
-    setattr(spline, field, params[field])
+    public_field = param_field or field
+    setattr(spline, field, params[public_field])
 
     def restore() -> None:
         setattr(spline, field, previous)
 
     _record_undo(f"set spline {field}", restore)
-    return {field: getattr(spline, field)}
+    return {public_field: getattr(spline, field)}

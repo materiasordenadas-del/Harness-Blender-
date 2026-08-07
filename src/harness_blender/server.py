@@ -49,6 +49,52 @@ def inspect_curve(object_name: str) -> str:
 
 
 @mcp.tool()
+def set_curve_point_radius(object_name: str, spline_index: int, point_index: int, radius: float) -> str:
+    """Set the taper radius of one editable curve point."""
+    return _run("set_curve_point_radius", {
+        "object_name": object_name, "spline_index": spline_index, "point_index": point_index, "radius": radius,
+    })
+
+
+@mcp.tool()
+def set_curve_point_tilt(object_name: str, spline_index: int, point_index: int, tilt: float) -> str:
+    """Set the tilt in radians of one editable curve point."""
+    return _run("set_curve_point_tilt", {
+        "object_name": object_name, "spline_index": spline_index, "point_index": point_index, "tilt": tilt,
+    })
+
+
+@mcp.tool()
+def set_curve_bevel_depth(object_name: str, bevel_depth: float) -> str:
+    """Set the curve's tube radius without converting it to a mesh."""
+    return _run("set_curve_bevel_depth", {"object_name": object_name, "bevel_depth": bevel_depth})
+
+
+@mcp.tool()
+def set_curve_bevel_resolution(object_name: str, bevel_resolution: int) -> str:
+    """Set the number of sides used for the editable curve tube."""
+    return _run("set_curve_bevel_resolution", {
+        "object_name": object_name, "bevel_resolution": bevel_resolution,
+    })
+
+
+@mcp.tool()
+def set_curve_resolution(object_name: str, spline_index: int, resolution_u: int) -> str:
+    """Set the evaluated resolution of one editable spline."""
+    return _run("set_curve_resolution", {
+        "object_name": object_name, "spline_index": spline_index, "resolution_u": resolution_u,
+    })
+
+
+@mcp.tool()
+def set_curve_cyclic(object_name: str, spline_index: int, cyclic: bool) -> str:
+    """Open or close one editable spline."""
+    return _run("set_curve_cyclic", {
+        "object_name": object_name, "spline_index": spline_index, "cyclic": cyclic,
+    })
+
+
+@mcp.tool()
 def create_primitive(
     primitive: str,
     name: str,

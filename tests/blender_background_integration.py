@@ -81,6 +81,42 @@ def main() -> None:
     if restored is None:
         raise AssertionError("undo did not restore the object deleted by delete_object")
 
+    curve = dispatch_operation(
+        "create_curve",
+        {
+            "name": "V1_Background_Curve",
+            "spline_type": "BEZIER",
+            "points": [[0.0, 0.0, 0.0], [1.0, 0.0, 0.5], [2.0, 1.0, 0.0]],
+        },
+    )
+    assert curve == {"name": "V1_Background_Curve", "type": "CURVE", "spline_type": "BEZIER", "point_count": 3}
+    dispatch_operation(
+        "set_curve_point_radius",
+        {"object_name": "V1_Background_Curve", "spline_index": 0, "point_index": 1, "radius": 0.4},
+    )
+    dispatch_operation(
+        "set_curve_point_tilt",
+        {"object_name": "V1_Background_Curve", "spline_index": 0, "point_index": 1, "tilt": 0.25},
+    )
+    dispatch_operation("set_curve_bevel_depth", {"object_name": "V1_Background_Curve", "bevel_depth": 0.1})
+    dispatch_operation("set_curve_bevel_resolution", {"object_name": "V1_Background_Curve", "bevel_resolution": 3})
+    dispatch_operation(
+        "set_curve_resolution",
+        {"object_name": "V1_Background_Curve", "spline_index": 0, "resolution_u": 16},
+    )
+    dispatch_operation(
+        "set_curve_cyclic",
+        {"object_name": "V1_Background_Curve", "spline_index": 0, "cyclic": True},
+    )
+    inspected_curve = dispatch_operation("inspect_curve", {"object_name": "V1_Background_Curve"})
+    spline = inspected_curve["splines"][0]
+    assert_close([inspected_curve["bevel_depth"]], [0.1])
+    assert inspected_curve["bevel_resolution"] == 3
+    assert spline["cyclic"] is True
+    assert spline["resolution_u"] == 16
+    assert_close([spline["points"][1]["radius"]], [0.4])
+    assert_close([spline["points"][1]["tilt"]], [0.25])
+
     print("HARNESS_BLENDER_BACKGROUND_INTEGRATION_OK")
 
 
