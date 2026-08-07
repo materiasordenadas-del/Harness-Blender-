@@ -1,4 +1,4 @@
-"""MCP server exposing the V0 Blender semantic toolset."""
+"""MCP server exposing the Harness Blender V1 semantic toolset."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from mcp.server.fastmcp import FastMCP, Image
 
 from .connection import BlenderConnection
 
-mcp = FastMCP("Harness Blender V0")
+mcp = FastMCP("Harness Blender V1")
 _connection = BlenderConnection()
 
 
@@ -34,6 +34,128 @@ def inspect_scene() -> str:
 def inspect_object(object_name: str) -> str:
     """Inspect one object, including transform, mesh counts, modifiers and materials."""
     return _run("inspect_object", {"object_name": object_name})
+
+
+@mcp.tool()
+def create_curve(name: str, spline_type: str, points: list[list[float]]) -> str:
+    """Create an editable 3D Bézier, NURBS or Poly curve from 2-256 points."""
+    return _run("create_curve", {"name": name, "spline_type": spline_type, "points": points})
+
+
+@mcp.tool()
+def inspect_curve(object_name: str) -> str:
+    """Inspect an editable curve, including splines, points, handles, radius and bevel."""
+    return _run("inspect_curve", {"object_name": object_name})
+
+
+@mcp.tool()
+def add_curve_point(object_name: str, spline_index: int, co: list[float]) -> str:
+    """Append one editable point to a single-spline curve."""
+    return _run("add_curve_point", {"object_name": object_name, "spline_index": spline_index, "co": co})
+
+
+@mcp.tool()
+def move_curve_point(object_name: str, spline_index: int, point_index: int, co: list[float]) -> str:
+    """Move one editable curve point without converting the curve."""
+    return _run("move_curve_point", {
+        "object_name": object_name, "spline_index": spline_index, "point_index": point_index, "co": co,
+    })
+
+
+@mcp.tool()
+def remove_curve_point(object_name: str, spline_index: int, point_index: int) -> str:
+    """Remove one point while retaining at least two points in the spline."""
+    return _run("remove_curve_point", {
+        "object_name": object_name, "spline_index": spline_index, "point_index": point_index,
+    })
+
+
+@mcp.tool()
+def set_curve_handle_type(
+    object_name: str, spline_index: int, point_index: int, side: str, handle_type: str
+) -> str:
+    """Set one Bézier handle type: AUTO, ALIGNED, FREE or VECTOR."""
+    return _run("set_curve_handle_type", {
+        "object_name": object_name, "spline_index": spline_index, "point_index": point_index,
+        "side": side, "handle_type": handle_type,
+    })
+
+
+@mcp.tool()
+def set_curve_handle_position(
+    object_name: str, spline_index: int, point_index: int, side: str, co: list[float]
+) -> str:
+    """Set the position of one Bézier handle in object-local coordinates."""
+    return _run("set_curve_handle_position", {
+        "object_name": object_name, "spline_index": spline_index, "point_index": point_index,
+        "side": side, "co": co,
+    })
+
+
+@mcp.tool()
+def subdivide_curve(object_name: str, spline_index: int, cuts: int) -> str:
+    """Insert 1-16 evenly spaced editable control points per spline segment."""
+    return _run("subdivide_curve", {"object_name": object_name, "spline_index": spline_index, "cuts": cuts})
+
+
+@mcp.tool()
+def resample_curve(object_name: str, spline_index: int, point_count: int) -> str:
+    """Replace a spline with exactly 2-256 editable, evenly sampled control points."""
+    return _run("resample_curve", {
+        "object_name": object_name, "spline_index": spline_index, "point_count": point_count,
+    })
+
+
+@mcp.tool()
+def convert_curve_to_mesh(object_name: str, mesh_name: str) -> str:
+    """Create an explicit mesh copy of a curve, preserving its editable source."""
+    return _run("convert_curve_to_mesh", {"object_name": object_name, "mesh_name": mesh_name})
+
+
+@mcp.tool()
+def set_curve_point_radius(object_name: str, spline_index: int, point_index: int, radius: float) -> str:
+    """Set the taper radius of one editable curve point."""
+    return _run("set_curve_point_radius", {
+        "object_name": object_name, "spline_index": spline_index, "point_index": point_index, "radius": radius,
+    })
+
+
+@mcp.tool()
+def set_curve_point_tilt(object_name: str, spline_index: int, point_index: int, tilt: float) -> str:
+    """Set the tilt in radians of one editable curve point."""
+    return _run("set_curve_point_tilt", {
+        "object_name": object_name, "spline_index": spline_index, "point_index": point_index, "tilt": tilt,
+    })
+
+
+@mcp.tool()
+def set_curve_bevel_depth(object_name: str, bevel_depth: float) -> str:
+    """Set the curve's tube radius without converting it to a mesh."""
+    return _run("set_curve_bevel_depth", {"object_name": object_name, "bevel_depth": bevel_depth})
+
+
+@mcp.tool()
+def set_curve_bevel_resolution(object_name: str, bevel_resolution: int) -> str:
+    """Set the number of sides used for the editable curve tube."""
+    return _run("set_curve_bevel_resolution", {
+        "object_name": object_name, "bevel_resolution": bevel_resolution,
+    })
+
+
+@mcp.tool()
+def set_curve_resolution(object_name: str, spline_index: int, resolution_u: int) -> str:
+    """Set the evaluated resolution of one editable spline."""
+    return _run("set_curve_resolution", {
+        "object_name": object_name, "spline_index": spline_index, "resolution_u": resolution_u,
+    })
+
+
+@mcp.tool()
+def set_curve_cyclic(object_name: str, spline_index: int, cyclic: bool) -> str:
+    """Open or close one editable spline."""
+    return _run("set_curve_cyclic", {
+        "object_name": object_name, "spline_index": spline_index, "cyclic": cyclic,
+    })
 
 
 @mcp.tool()
@@ -90,7 +212,7 @@ def save_blend(filepath: str | None = None) -> str:
 
 @mcp.tool()
 def undo_last_action() -> str:
-    """Revert the most recent reversible Harness Blender V0 operation."""
+    """Revert the most recent reversible Harness Blender operation."""
     return _run("undo")
 
 
@@ -110,16 +232,32 @@ def capture_blender_screen() -> Image:
     return Image(data=data, format="png")
 
 
-@mcp.resource("harness://v0/capabilities")
+@mcp.resource("harness://v1/capabilities")
 def capabilities() -> str:
-    """Describe the exact limits of V0 so the agent does not invent tools."""
+    """Describe the exact limits of V1 so the agent does not invent tools."""
     payload: dict[str, Any] = {
-        "version": "0.1.0",
+        "version": "0.2.0-v1-curves",
         "transport": "typed operation + validated params; no Python source over socket",
         "tools": [
             "blender_ping",
             "inspect_scene",
             "inspect_object",
+            "create_curve",
+            "inspect_curve",
+            "add_curve_point",
+            "move_curve_point",
+            "remove_curve_point",
+            "set_curve_handle_type",
+            "set_curve_handle_position",
+            "set_curve_point_radius",
+            "set_curve_point_tilt",
+            "set_curve_bevel_depth",
+            "set_curve_bevel_resolution",
+            "set_curve_resolution",
+            "set_curve_cyclic",
+            "subdivide_curve",
+            "resample_curve",
+            "convert_curve_to_mesh",
             "create_primitive",
             "transform_object",
             "delete_object",

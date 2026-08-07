@@ -26,6 +26,22 @@ ALLOWED_OPERATIONS = {
     "save_blend",
     "undo",
     "capture_screen",
+    "create_curve",
+    "inspect_curve",
+    "add_curve_point",
+    "move_curve_point",
+    "remove_curve_point",
+    "set_curve_handle_type",
+    "set_curve_handle_position",
+    "subdivide_curve",
+    "resample_curve",
+    "convert_curve_to_mesh",
+    "set_curve_point_radius",
+    "set_curve_point_tilt",
+    "set_curve_bevel_depth",
+    "set_curve_bevel_resolution",
+    "set_curve_resolution",
+    "set_curve_cyclic",
 }
 MAX_NAME_LENGTH = 255
 MAX_ABS_COORDINATE = 1_000_000.0
@@ -68,6 +84,33 @@ def _vec3(value: Any, field: str, *, scale: bool = False) -> list[float]:
             raise ProtocolError(f"{field} values must be finite and within ±{limit:g}")
         result.append(number)
     return result
+
+
+def _number(value: Any, field: str, *, minimum: float, maximum: float) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ProtocolError(f"{field} must be a number")
+    number = float(value)
+    if not math.isfinite(number) or not minimum <= number <= maximum:
+        raise ProtocolError(f"{field} must be finite and between {minimum:g} and {maximum:g}")
+    return number
+
+
+def _integer(value: Any, field: str, *, minimum: int, maximum: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
+        raise ProtocolError(f"{field} must be an integer between {minimum} and {maximum}")
+    return value
+
+
+def _curve_point_target(params: dict[str, Any], operation: str, value_field: str) -> dict[str, Any]:
+    allowed = {"object_name", "spline_index", "point_index", value_field}
+    _reject_unknown_keys(params, allowed, where=f"{operation} parameter")
+    if not all(key in params for key in allowed):
+        raise ProtocolError(f"{operation} requires object_name, spline_index, point_index and {value_field}")
+    return {
+        "object_name": _name(params["object_name"], "object_name"),
+        "spline_index": _integer(params["spline_index"], "spline_index", minimum=0, maximum=255),
+        "point_index": _integer(params["point_index"], "point_index", minimum=0, maximum=4095),
+    }
 
 
 def _no_params(params: dict[str, Any], operation: str) -> dict[str, Any]:
@@ -134,6 +177,146 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         if not filepath.lower().endswith(".blend"):
             raise ProtocolError("filepath must end in .blend")
         return {"filepath": filepath}
+
+    if operation == "create_curve":
+        _reject_unknown_keys(params, {"name", "spline_type", "points"}, where="create_curve parameter")
+        if not all(key in params for key in ("name", "spline_type", "points")):
+            raise ProtocolError("create_curve requires name, spline_type and points")
+        if params["spline_type"] not in {"BEZIER", "NURBS", "POLY"}:
+            raise ProtocolError("spline_type must be BEZIER, NURBS or POLY")
+        points = params["points"]
+        if not isinstance(points, list) or not 2 <= len(points) <= 256:
+            raise ProtocolError("points must contain 2-256 coordinates")
+        return {"name": _name(params["name"], "name"), "spline_type": params["spline_type"],
+                "points": [_vec3(point, "points item") for point in points]}
+
+    if operation == "inspect_curve":
+        _reject_unknown_keys(params, {"object_name"}, where="inspect_curve parameter")
+        if "object_name" not in params:
+            raise ProtocolError("inspect_curve requires object_name")
+        return {"object_name": _name(params["object_name"], "object_name")}
+
+    if operation in {"add_curve_point", "move_curve_point", "remove_curve_point"}:
+        allowed = {"object_name", "spline_index", "point_index", "co"}
+        if operation == "add_curve_point":
+            allowed.remove("point_index")
+        elif operation == "remove_curve_point":
+            allowed.remove("co")
+        _reject_unknown_keys(params, allowed, where=f"{operation} parameter")
+        if not all(key in params for key in allowed):
+            raise ProtocolError(f"{operation} requires {', '.join(sorted(allowed))}")
+        normalized = {
+            "object_name": _name(params["object_name"], "object_name"),
+            "spline_index": _integer(params["spline_index"], "spline_index", minimum=0, maximum=255),
+        }
+        if operation != "add_curve_point":
+            normalized["point_index"] = _integer(params["point_index"], "point_index", minimum=0, maximum=4095)
+        if operation != "remove_curve_point":
+            normalized["co"] = _vec3(params["co"], "co")
+        return normalized
+
+    if operation in {"set_curve_handle_type", "set_curve_handle_position"}:
+        allowed = {"object_name", "spline_index", "point_index", "side"}
+        allowed.add("handle_type" if operation == "set_curve_handle_type" else "co")
+        _reject_unknown_keys(params, allowed, where=f"{operation} parameter")
+        if not all(key in params for key in allowed):
+            raise ProtocolError(f"{operation} requires {', '.join(sorted(allowed))}")
+        if params["side"] not in {"left", "right"}:
+            raise ProtocolError("side must be left or right")
+        normalized = {
+            "object_name": _name(params["object_name"], "object_name"),
+            "spline_index": _integer(params["spline_index"], "spline_index", minimum=0, maximum=255),
+            "point_index": _integer(params["point_index"], "point_index", minimum=0, maximum=4095),
+            "side": params["side"],
+        }
+        if operation == "set_curve_handle_type":
+            if params["handle_type"] not in {"AUTO", "ALIGNED", "FREE", "VECTOR"}:
+                raise ProtocolError("handle_type must be AUTO, ALIGNED, FREE or VECTOR")
+            normalized["handle_type"] = params["handle_type"]
+        else:
+            normalized["co"] = _vec3(params["co"], "co")
+        return normalized
+
+    if operation == "subdivide_curve":
+        _reject_unknown_keys(params, {"object_name", "spline_index", "cuts"}, where="subdivide_curve parameter")
+        if not all(key in params for key in ("object_name", "spline_index", "cuts")):
+            raise ProtocolError("subdivide_curve requires object_name, spline_index and cuts")
+        return {
+            "object_name": _name(params["object_name"], "object_name"),
+            "spline_index": _integer(params["spline_index"], "spline_index", minimum=0, maximum=255),
+            "cuts": _integer(params["cuts"], "cuts", minimum=1, maximum=16),
+        }
+
+    if operation == "resample_curve":
+        _reject_unknown_keys(params, {"object_name", "spline_index", "point_count"}, where="resample_curve parameter")
+        if not all(key in params for key in ("object_name", "spline_index", "point_count")):
+            raise ProtocolError("resample_curve requires object_name, spline_index and point_count")
+        return {
+            "object_name": _name(params["object_name"], "object_name"),
+            "spline_index": _integer(params["spline_index"], "spline_index", minimum=0, maximum=255),
+            "point_count": _integer(params["point_count"], "point_count", minimum=2, maximum=256),
+        }
+
+    if operation == "convert_curve_to_mesh":
+        _reject_unknown_keys(params, {"object_name", "mesh_name"}, where="convert_curve_to_mesh parameter")
+        if "object_name" not in params or "mesh_name" not in params:
+            raise ProtocolError("convert_curve_to_mesh requires object_name and mesh_name")
+        return {
+            "object_name": _name(params["object_name"], "object_name"),
+            "mesh_name": _name(params["mesh_name"], "mesh_name"),
+        }
+
+    if operation == "set_curve_point_radius":
+        normalized = _curve_point_target(params, operation, "radius")
+        normalized["radius"] = _number(params["radius"], "radius", minimum=0.0, maximum=MAX_ABS_SCALE)
+        return normalized
+
+    if operation == "set_curve_point_tilt":
+        normalized = _curve_point_target(params, operation, "tilt")
+        normalized["tilt"] = _number(
+            params["tilt"], "tilt", minimum=-MAX_ABS_COORDINATE, maximum=MAX_ABS_COORDINATE
+        )
+        return normalized
+
+    if operation == "set_curve_bevel_depth":
+        _reject_unknown_keys(params, {"object_name", "bevel_depth"}, where="set_curve_bevel_depth parameter")
+        if "object_name" not in params or "bevel_depth" not in params:
+            raise ProtocolError("set_curve_bevel_depth requires object_name and bevel_depth")
+        return {
+            "object_name": _name(params["object_name"], "object_name"),
+            "bevel_depth": _number(params["bevel_depth"], "bevel_depth", minimum=0.0, maximum=MAX_ABS_SCALE),
+        }
+
+    if operation == "set_curve_bevel_resolution":
+        _reject_unknown_keys(params, {"object_name", "bevel_resolution"}, where="set_curve_bevel_resolution parameter")
+        if "object_name" not in params or "bevel_resolution" not in params:
+            raise ProtocolError("set_curve_bevel_resolution requires object_name and bevel_resolution")
+        return {
+            "object_name": _name(params["object_name"], "object_name"),
+            "bevel_resolution": _integer(params["bevel_resolution"], "bevel_resolution", minimum=0, maximum=32),
+        }
+
+    if operation == "set_curve_resolution":
+        _reject_unknown_keys(params, {"object_name", "spline_index", "resolution_u"}, where="set_curve_resolution parameter")
+        if not all(key in params for key in ("object_name", "spline_index", "resolution_u")):
+            raise ProtocolError("set_curve_resolution requires object_name, spline_index and resolution_u")
+        return {
+            "object_name": _name(params["object_name"], "object_name"),
+            "spline_index": _integer(params["spline_index"], "spline_index", minimum=0, maximum=255),
+            "resolution_u": _integer(params["resolution_u"], "resolution_u", minimum=1, maximum=1024),
+        }
+
+    if operation == "set_curve_cyclic":
+        _reject_unknown_keys(params, {"object_name", "spline_index", "cyclic"}, where="set_curve_cyclic parameter")
+        if not all(key in params for key in ("object_name", "spline_index", "cyclic")):
+            raise ProtocolError("set_curve_cyclic requires object_name, spline_index and cyclic")
+        if not isinstance(params["cyclic"], bool):
+            raise ProtocolError("cyclic must be a boolean")
+        return {
+            "object_name": _name(params["object_name"], "object_name"),
+            "spline_index": _integer(params["spline_index"], "spline_index", minimum=0, maximum=255),
+            "cyclic": params["cyclic"],
+        }
 
     raise ProtocolError(f"Unhandled V0 operation: {operation}")
 

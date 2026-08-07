@@ -81,6 +81,91 @@ def main() -> None:
     if restored is None:
         raise AssertionError("undo did not restore the object deleted by delete_object")
 
+    curve = dispatch_operation(
+        "create_curve",
+        {
+            "name": "V1_Background_Curve",
+            "spline_type": "BEZIER",
+            "points": [[0.0, 0.0, 0.0], [1.0, 0.0, 0.5], [2.0, 1.0, 0.0]],
+        },
+    )
+    assert curve == {"name": "V1_Background_Curve", "type": "CURVE", "spline_type": "BEZIER", "point_count": 3}
+    changed_handle_type = dispatch_operation(
+        "set_curve_handle_type",
+        {"object_name": "V1_Background_Curve", "spline_index": 0, "point_index": 1, "side": "right", "handle_type": "FREE"},
+    )
+    assert changed_handle_type == {"side": "right", "handle_type": "FREE"}
+    changed_handle_position = dispatch_operation(
+        "set_curve_handle_position",
+        {"object_name": "V1_Background_Curve", "spline_index": 0, "point_index": 1, "side": "right", "co": [1.5, 0.5, 0.5]},
+    )
+    assert_close(changed_handle_position["co"], [1.5, 0.5, 0.5])
+    added = dispatch_operation(
+        "add_curve_point",
+        {"object_name": "V1_Background_Curve", "spline_index": 0, "co": [3.0, 1.0, 0.0]},
+    )
+    assert added == {"point_index": 3, "point_count": 4}
+    moved = dispatch_operation(
+        "move_curve_point",
+        {"object_name": "V1_Background_Curve", "spline_index": 0, "point_index": 3, "co": [3.0, 2.0, 0.0]},
+    )
+    assert_close(moved["co"], [3.0, 2.0, 0.0])
+    removed = dispatch_operation(
+        "remove_curve_point",
+        {"object_name": "V1_Background_Curve", "spline_index": 0, "point_index": 3},
+    )
+    assert removed == {"removed_index": 3, "point_count": 3}
+    dispatch_operation("undo", {})
+    undo_removed_curve = dispatch_operation("inspect_curve", {"object_name": "V1_Background_Curve"})
+    assert undo_removed_curve["splines"][0]["point_count"] == 4
+    dispatch_operation("undo", {})
+    undo_moved_curve = dispatch_operation("inspect_curve", {"object_name": "V1_Background_Curve"})
+    assert_close(undo_moved_curve["splines"][0]["points"][3]["co"][:3], [3.0, 1.0, 0.0])
+    dispatch_operation("undo", {})
+    undo_added_curve = dispatch_operation("inspect_curve", {"object_name": "V1_Background_Curve"})
+    assert undo_added_curve["splines"][0]["point_count"] == 3
+    subdivided = dispatch_operation(
+        "subdivide_curve", {"object_name": "V1_Background_Curve", "spline_index": 0, "cuts": 1},
+    )
+    assert subdivided == {"point_count": 5, "cuts": 1}
+    resampled = dispatch_operation(
+        "resample_curve", {"object_name": "V1_Background_Curve", "spline_index": 0, "point_count": 4},
+    )
+    assert resampled == {"point_count": 4}
+    converted = dispatch_operation(
+        "convert_curve_to_mesh", {"object_name": "V1_Background_Curve", "mesh_name": "V1_Background_Mesh"},
+    )
+    assert converted["source"] == "V1_Background_Curve"
+    assert converted["vertices"] > 0
+    assert bpy.data.objects["V1_Background_Curve"].type == "CURVE"
+    assert bpy.data.objects["V1_Background_Mesh"].type == "MESH"
+    dispatch_operation(
+        "set_curve_point_radius",
+        {"object_name": "V1_Background_Curve", "spline_index": 0, "point_index": 1, "radius": 0.4},
+    )
+    dispatch_operation(
+        "set_curve_point_tilt",
+        {"object_name": "V1_Background_Curve", "spline_index": 0, "point_index": 1, "tilt": 0.25},
+    )
+    dispatch_operation("set_curve_bevel_depth", {"object_name": "V1_Background_Curve", "bevel_depth": 0.1})
+    dispatch_operation("set_curve_bevel_resolution", {"object_name": "V1_Background_Curve", "bevel_resolution": 3})
+    dispatch_operation(
+        "set_curve_resolution",
+        {"object_name": "V1_Background_Curve", "spline_index": 0, "resolution_u": 16},
+    )
+    dispatch_operation(
+        "set_curve_cyclic",
+        {"object_name": "V1_Background_Curve", "spline_index": 0, "cyclic": True},
+    )
+    inspected_curve = dispatch_operation("inspect_curve", {"object_name": "V1_Background_Curve"})
+    spline = inspected_curve["splines"][0]
+    assert_close([inspected_curve["bevel_depth"]], [0.1])
+    assert inspected_curve["bevel_resolution"] == 3
+    assert spline["cyclic"] is True
+    assert spline["resolution_u"] == 16
+    assert_close([spline["points"][1]["radius"]], [0.4])
+    assert_close([spline["points"][1]["tilt"]], [0.25])
+
     print("HARNESS_BLENDER_BACKGROUND_INTEGRATION_OK")
 
 
