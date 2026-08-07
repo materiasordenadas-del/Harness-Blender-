@@ -20,6 +20,7 @@ ALLOWED_OPERATIONS = {
     "inspect_scene",
     "inspect_scene_detailed",
     "evaluate_mesh",
+    "evaluate_spatial",
     "inspect_object",
     "create_primitive",
     "transform_object",
@@ -212,6 +213,10 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         if "object_name" not in params:
             raise ProtocolError("inspect_curve requires object_name")
         return {"object_name": _name(params["object_name"], "object_name")}
+
+    if operation == "evaluate_spatial":
+        _reject_unknown_keys(params, {"object_name", "target_object_name"}, where="evaluate_spatial parameter")
+        return {"object_name": _name(params.get("object_name"), "object_name"), "target_object_name": _name(params.get("target_object_name"), "target_object_name")}
 
     if operation == "recalculate_normals":
         _reject_unknown_keys(params, {"object_name", "outward"}, where="recalculate_normals parameter")

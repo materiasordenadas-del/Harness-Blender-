@@ -7,6 +7,7 @@ from typing import Any
 
 import bmesh
 import bpy
+from mathutils import Vector
 
 
 def inspect_scene_detailed(_params: dict[str, Any]) -> dict[str, Any]:
@@ -56,3 +57,42 @@ def evaluate_mesh(params: dict[str, Any]) -> dict[str, Any]:
         }
     finally:
         bm.free()
+
+
+def _world_bounds(obj: bpy.types.Object) -> tuple[Vector, Vector]:
+    corners = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
+    return (
+        Vector((min(corner[axis] for corner in corners) for axis in range(3))),
+        Vector((max(corner[axis] for corner in corners) for axis in range(3))),
+    )
+
+
+def evaluate_spatial(params: dict[str, Any]) -> dict[str, Any]:
+    first = bpy.data.objects.get(params["object_name"])
+    second = bpy.data.objects.get(params["target_object_name"])
+    if first is None or second is None:
+        raise ValueError("Both objects must exist")
+    first_min, first_max = _world_bounds(first)
+    second_min, second_max = _world_bounds(second)
+    nearest_first_values = []
+    nearest_second_values = []
+    for axis in range(3):
+        if first_max[axis] < second_min[axis]:
+            nearest_first_values.append(first_max[axis])
+            nearest_second_values.append(second_min[axis])
+        elif second_max[axis] < first_min[axis]:
+            nearest_first_values.append(first_min[axis])
+            nearest_second_values.append(second_max[axis])
+        else:
+            shared = max(first_min[axis], second_min[axis])
+            nearest_first_values.append(shared)
+            nearest_second_values.append(shared)
+    nearest_first = Vector(nearest_first_values)
+    nearest_second = Vector(nearest_second_values)
+    overlaps = all(first_min[axis] <= second_max[axis] and second_min[axis] <= first_max[axis] for axis in range(3))
+    return {
+        "object_name": first.name, "target_object_name": second.name,
+        "bounding_box_overlap": overlaps,
+        "distance": float((nearest_second - nearest_first).length),
+        "nearest_points": {"object": [float(value) for value in nearest_first], "target": [float(value) for value in nearest_second]},
+    }
