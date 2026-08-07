@@ -8,6 +8,32 @@ from typing import Any
 import bmesh
 import bpy
 
+from .operations import _record_undo
+
+
+def _mesh_object(name: str) -> bpy.types.Object:
+    obj = bpy.data.objects.get(name)
+    if obj is None or obj.type != "MESH":
+        raise TypeError("Operation requires an existing MESH object")
+    return obj
+
+
+def _topology_snapshot(mesh: bpy.types.Mesh) -> dict[str, Any]:
+    return {
+        "vertices": [tuple(vertex.co) for vertex in mesh.vertices],
+        "faces": [tuple(polygon.vertices) for polygon in mesh.polygons],
+        "materials": [polygon.material_index for polygon in mesh.polygons],
+        "smooth": [polygon.use_smooth for polygon in mesh.polygons],
+    }
+
+
+def _restore_topology(mesh: bpy.types.Mesh, snapshot: dict[str, Any]) -> None:
+    mesh.clear_geometry()
+    mesh.from_pydata(snapshot["vertices"], [], snapshot["faces"])
+    for polygon, material, smooth in zip(mesh.polygons, snapshot["materials"], snapshot["smooth"]):
+        polygon.material_index, polygon.use_smooth = material, smooth
+    mesh.update()
+
 
 def inspect_mesh_detailed(params: dict[str, Any]) -> dict[str, Any]:
     obj = bpy.data.objects.get(params["object_name"])
@@ -33,9 +59,8 @@ def inspect_mesh_detailed(params: dict[str, Any]) -> dict[str, Any]:
 
 
 def recalculate_normals(params: dict[str, Any]) -> dict[str, Any]:
-    obj = bpy.data.objects.get(params["object_name"])
-    if obj is None or obj.type != "MESH":
-        raise TypeError("recalculate_normals requires an existing MESH object")
+    obj = _mesh_object(params["object_name"])
+    snapshot = _topology_snapshot(obj.data)
     bm = bmesh.new()
     try:
         bm.from_mesh(obj.data)
@@ -46,4 +71,5 @@ def recalculate_normals(params: dict[str, Any]) -> dict[str, Any]:
         obj.data.update()
     finally:
         bm.free()
+    _record_undo("recalculate mesh normals", lambda: _restore_topology(obj.data, snapshot))
     return {"name": obj.name, "orientation": "outside" if params["outward"] else "inside"}
