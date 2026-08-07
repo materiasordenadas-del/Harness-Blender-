@@ -90,6 +90,30 @@ def main() -> None:
         },
     )
     assert curve == {"name": "V1_Background_Curve", "type": "CURVE", "spline_type": "BEZIER", "point_count": 3}
+    added = dispatch_operation(
+        "add_curve_point",
+        {"object_name": "V1_Background_Curve", "spline_index": 0, "co": [3.0, 1.0, 0.0]},
+    )
+    assert added == {"point_index": 3, "point_count": 4}
+    moved = dispatch_operation(
+        "move_curve_point",
+        {"object_name": "V1_Background_Curve", "spline_index": 0, "point_index": 3, "co": [3.0, 2.0, 0.0]},
+    )
+    assert_close(moved["co"], [3.0, 2.0, 0.0])
+    removed = dispatch_operation(
+        "remove_curve_point",
+        {"object_name": "V1_Background_Curve", "spline_index": 0, "point_index": 3},
+    )
+    assert removed == {"removed_index": 3, "point_count": 3}
+    dispatch_operation("undo", {})
+    undo_removed_curve = dispatch_operation("inspect_curve", {"object_name": "V1_Background_Curve"})
+    assert undo_removed_curve["splines"][0]["point_count"] == 4
+    dispatch_operation("undo", {})
+    undo_moved_curve = dispatch_operation("inspect_curve", {"object_name": "V1_Background_Curve"})
+    assert_close(undo_moved_curve["splines"][0]["points"][3]["co"][:3], [3.0, 1.0, 0.0])
+    dispatch_operation("undo", {})
+    undo_added_curve = dispatch_operation("inspect_curve", {"object_name": "V1_Background_Curve"})
+    assert undo_added_curve["splines"][0]["point_count"] == 3
     dispatch_operation(
         "set_curve_point_radius",
         {"object_name": "V1_Background_Curve", "spline_index": 0, "point_index": 1, "radius": 0.4},

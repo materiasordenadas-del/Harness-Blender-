@@ -64,3 +64,17 @@ def test_curve_profile_and_geometry_settings_are_normalized():
     assert radius["radius"] == 0.25
     assert bevel["bevel_depth"] == 0.5
     assert cyclic["cyclic"] is True
+
+
+def test_curve_point_editing_is_normalized():
+    _, added = parse("add_curve_point", {"object_name": "Aorta", "spline_index": 0, "co": [1, 2, 3]})
+    _, moved = parse(
+        "move_curve_point",
+        {"object_name": "Aorta", "spline_index": 0, "point_index": 2, "co": [3, 2, 1]},
+    )
+    _, removed = parse(
+        "remove_curve_point", {"object_name": "Aorta", "spline_index": 0, "point_index": 2},
+    )
+    assert added["co"] == [1.0, 2.0, 3.0]
+    assert moved["co"] == [3.0, 2.0, 1.0]
+    assert removed["point_index"] == 2

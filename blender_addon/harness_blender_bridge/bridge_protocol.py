@@ -28,6 +28,9 @@ ALLOWED_OPERATIONS = {
     "capture_screen",
     "create_curve",
     "inspect_curve",
+    "add_curve_point",
+    "move_curve_point",
+    "remove_curve_point",
     "set_curve_point_radius",
     "set_curve_point_tilt",
     "set_curve_bevel_depth",
@@ -187,6 +190,25 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         if "object_name" not in params:
             raise ProtocolError("inspect_curve requires object_name")
         return {"object_name": _name(params["object_name"], "object_name")}
+
+    if operation in {"add_curve_point", "move_curve_point", "remove_curve_point"}:
+        allowed = {"object_name", "spline_index", "point_index", "co"}
+        if operation == "add_curve_point":
+            allowed.remove("point_index")
+        elif operation == "remove_curve_point":
+            allowed.remove("co")
+        _reject_unknown_keys(params, allowed, where=f"{operation} parameter")
+        if not all(key in params for key in allowed):
+            raise ProtocolError(f"{operation} requires {', '.join(sorted(allowed))}")
+        normalized = {
+            "object_name": _name(params["object_name"], "object_name"),
+            "spline_index": _integer(params["spline_index"], "spline_index", minimum=0, maximum=255),
+        }
+        if operation != "add_curve_point":
+            normalized["point_index"] = _integer(params["point_index"], "point_index", minimum=0, maximum=4095)
+        if operation != "remove_curve_point":
+            normalized["co"] = _vec3(params["co"], "co")
+        return normalized
 
     if operation == "set_curve_point_radius":
         normalized = _curve_point_target(params, operation, "radius")

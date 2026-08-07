@@ -49,6 +49,28 @@ def inspect_curve(object_name: str) -> str:
 
 
 @mcp.tool()
+def add_curve_point(object_name: str, spline_index: int, co: list[float]) -> str:
+    """Append one editable point to a single-spline curve."""
+    return _run("add_curve_point", {"object_name": object_name, "spline_index": spline_index, "co": co})
+
+
+@mcp.tool()
+def move_curve_point(object_name: str, spline_index: int, point_index: int, co: list[float]) -> str:
+    """Move one editable curve point without converting the curve."""
+    return _run("move_curve_point", {
+        "object_name": object_name, "spline_index": spline_index, "point_index": point_index, "co": co,
+    })
+
+
+@mcp.tool()
+def remove_curve_point(object_name: str, spline_index: int, point_index: int) -> str:
+    """Remove one point while retaining at least two points in the spline."""
+    return _run("remove_curve_point", {
+        "object_name": object_name, "spline_index": spline_index, "point_index": point_index,
+    })
+
+
+@mcp.tool()
 def set_curve_point_radius(object_name: str, spline_index: int, point_index: int, radius: float) -> str:
     """Set the taper radius of one editable curve point."""
     return _run("set_curve_point_radius", {
