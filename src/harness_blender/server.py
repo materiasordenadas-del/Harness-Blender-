@@ -93,6 +93,26 @@ def set_curve_handle_position(
 
 
 @mcp.tool()
+def subdivide_curve(object_name: str, spline_index: int, cuts: int) -> str:
+    """Insert 1-16 evenly spaced editable control points per spline segment."""
+    return _run("subdivide_curve", {"object_name": object_name, "spline_index": spline_index, "cuts": cuts})
+
+
+@mcp.tool()
+def resample_curve(object_name: str, spline_index: int, point_count: int) -> str:
+    """Replace a spline with exactly 2-256 editable, evenly sampled control points."""
+    return _run("resample_curve", {
+        "object_name": object_name, "spline_index": spline_index, "point_count": point_count,
+    })
+
+
+@mcp.tool()
+def convert_curve_to_mesh(object_name: str, mesh_name: str) -> str:
+    """Create an explicit mesh copy of a curve, preserving its editable source."""
+    return _run("convert_curve_to_mesh", {"object_name": object_name, "mesh_name": mesh_name})
+
+
+@mcp.tool()
 def set_curve_point_radius(object_name: str, spline_index: int, point_index: int, radius: float) -> str:
     """Set the taper radius of one editable curve point."""
     return _run("set_curve_point_radius", {

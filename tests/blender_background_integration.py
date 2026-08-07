@@ -124,6 +124,21 @@ def main() -> None:
     dispatch_operation("undo", {})
     undo_added_curve = dispatch_operation("inspect_curve", {"object_name": "V1_Background_Curve"})
     assert undo_added_curve["splines"][0]["point_count"] == 3
+    subdivided = dispatch_operation(
+        "subdivide_curve", {"object_name": "V1_Background_Curve", "spline_index": 0, "cuts": 1},
+    )
+    assert subdivided == {"point_count": 5, "cuts": 1}
+    resampled = dispatch_operation(
+        "resample_curve", {"object_name": "V1_Background_Curve", "spline_index": 0, "point_count": 4},
+    )
+    assert resampled == {"point_count": 4}
+    converted = dispatch_operation(
+        "convert_curve_to_mesh", {"object_name": "V1_Background_Curve", "mesh_name": "V1_Background_Mesh"},
+    )
+    assert converted["source"] == "V1_Background_Curve"
+    assert converted["vertices"] > 0
+    assert bpy.data.objects["V1_Background_Curve"].type == "CURVE"
+    assert bpy.data.objects["V1_Background_Mesh"].type == "MESH"
     dispatch_operation(
         "set_curve_point_radius",
         {"object_name": "V1_Background_Curve", "spline_index": 0, "point_index": 1, "radius": 0.4},

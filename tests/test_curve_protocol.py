@@ -104,3 +104,12 @@ def test_bezier_handle_editing_is_normalized():
 def test_bezier_handle_invalid_values_are_rejected(operation, params):
     with pytest.raises(bridge_protocol.ProtocolError):
         parse(operation, params)
+
+
+def test_subdivide_and_mesh_conversion_are_normalized():
+    _, subdivide = parse("subdivide_curve", {"object_name": "Aorta", "spline_index": 0, "cuts": 2})
+    _, resample = parse("resample_curve", {"object_name": "Aorta", "spline_index": 0, "point_count": 12})
+    _, conversion = parse("convert_curve_to_mesh", {"object_name": "Aorta", "mesh_name": "Aorta_Mesh"})
+    assert subdivide["cuts"] == 2
+    assert resample["point_count"] == 12
+    assert conversion == {"object_name": "Aorta", "mesh_name": "Aorta_Mesh"}

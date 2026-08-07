@@ -33,6 +33,9 @@ ALLOWED_OPERATIONS = {
     "remove_curve_point",
     "set_curve_handle_type",
     "set_curve_handle_position",
+    "subdivide_curve",
+    "resample_curve",
+    "convert_curve_to_mesh",
     "set_curve_point_radius",
     "set_curve_point_tilt",
     "set_curve_bevel_depth",
@@ -233,6 +236,35 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         else:
             normalized["co"] = _vec3(params["co"], "co")
         return normalized
+
+    if operation == "subdivide_curve":
+        _reject_unknown_keys(params, {"object_name", "spline_index", "cuts"}, where="subdivide_curve parameter")
+        if not all(key in params for key in ("object_name", "spline_index", "cuts")):
+            raise ProtocolError("subdivide_curve requires object_name, spline_index and cuts")
+        return {
+            "object_name": _name(params["object_name"], "object_name"),
+            "spline_index": _integer(params["spline_index"], "spline_index", minimum=0, maximum=255),
+            "cuts": _integer(params["cuts"], "cuts", minimum=1, maximum=16),
+        }
+
+    if operation == "resample_curve":
+        _reject_unknown_keys(params, {"object_name", "spline_index", "point_count"}, where="resample_curve parameter")
+        if not all(key in params for key in ("object_name", "spline_index", "point_count")):
+            raise ProtocolError("resample_curve requires object_name, spline_index and point_count")
+        return {
+            "object_name": _name(params["object_name"], "object_name"),
+            "spline_index": _integer(params["spline_index"], "spline_index", minimum=0, maximum=255),
+            "point_count": _integer(params["point_count"], "point_count", minimum=2, maximum=256),
+        }
+
+    if operation == "convert_curve_to_mesh":
+        _reject_unknown_keys(params, {"object_name", "mesh_name"}, where="convert_curve_to_mesh parameter")
+        if "object_name" not in params or "mesh_name" not in params:
+            raise ProtocolError("convert_curve_to_mesh requires object_name and mesh_name")
+        return {
+            "object_name": _name(params["object_name"], "object_name"),
+            "mesh_name": _name(params["mesh_name"], "mesh_name"),
+        }
 
     if operation == "set_curve_point_radius":
         normalized = _curve_point_target(params, operation, "radius")

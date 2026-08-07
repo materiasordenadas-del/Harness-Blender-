@@ -229,6 +229,104 @@ def set_handle_position(params: dict[str, Any]) -> dict[str, Any]:
     return {"side": params["side"], "co": [float(v) for v in getattr(point, field)]}
 
 
+def subdivide_curve(params: dict[str, Any]) -> dict[str, Any]:
+    """Linearly insert editable control points between existing control points."""
+    obj = _curve(params["object_name"])
+    spline = _spline(obj, params["spline_index"])
+    state = _spline_state(spline)
+    source = state["points"]
+    cuts = params["cuts"]
+    target_count = len(source) + (len(source) - 1) * cuts
+    if target_count > 256:
+        raise ValueError("Subdivision would exceed the V1 limit of 256 points")
+    result: list[dict[str, Any]] = []
+    for index, first in enumerate(source[:-1]):
+        second = source[index + 1]
+        result.append(first)
+        for cut in range(1, cuts + 1):
+            fraction = cut / (cuts + 1)
+            co = [first["co"][axis] + (second["co"][axis] - first["co"][axis]) * fraction for axis in range(3)]
+            point = {
+                "co": co,
+                "radius": first["radius"] + (second["radius"] - first["radius"]) * fraction,
+                "tilt": first["tilt"] + (second["tilt"] - first["tilt"]) * fraction,
+            }
+            if spline.type == "BEZIER":
+                point.update({
+                    "handle_left": co, "handle_right": co,
+                    "handle_left_type": "AUTO", "handle_right_type": "AUTO",
+                })
+            result.append(point)
+    result.append(source[-1])
+    new_state = {**state, "points": result}
+    _replace_single_spline(obj, new_state)
+
+    def restore() -> None:
+        _replace_single_spline(obj, state)
+
+    _record_undo("subdivide curve", restore)
+    return {"point_count": len(result), "cuts": cuts}
+
+
+def resample_curve(params: dict[str, Any]) -> dict[str, Any]:
+    """Replace a spline's control polygon with an exact evenly sampled count."""
+    obj = _curve(params["object_name"])
+    spline = _spline(obj, params["spline_index"])
+    state = _spline_state(spline)
+    source = state["points"]
+    target_count = params["point_count"]
+    result: list[dict[str, Any]] = []
+    segments = len(source) - 1
+    for target_index in range(target_count):
+        position = target_index * segments / (target_count - 1)
+        first_index = min(int(position), segments - 1)
+        fraction = position - first_index
+        first, second = source[first_index], source[first_index + 1]
+        co = [first["co"][axis] + (second["co"][axis] - first["co"][axis]) * fraction for axis in range(3)]
+        point = {
+            "co": co,
+            "radius": first["radius"] + (second["radius"] - first["radius"]) * fraction,
+            "tilt": first["tilt"] + (second["tilt"] - first["tilt"]) * fraction,
+        }
+        if spline.type == "BEZIER":
+            point.update({
+                "handle_left": co, "handle_right": co,
+                "handle_left_type": "AUTO", "handle_right_type": "AUTO",
+            })
+        result.append(point)
+    new_state = {**state, "points": result}
+    _replace_single_spline(obj, new_state)
+
+    def restore() -> None:
+        _replace_single_spline(obj, state)
+
+    _record_undo("resample curve", restore)
+    return {"point_count": target_count}
+
+
+def convert_curve_to_mesh(params: dict[str, Any]) -> dict[str, Any]:
+    """Create a mesh copy from the evaluated curve, retaining the editable source."""
+    obj = _curve(params["object_name"])
+    mesh_name = params["mesh_name"]
+    if bpy.data.objects.get(mesh_name) is not None:
+        raise ValueError(f"An object named {mesh_name!r} already exists")
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    mesh = bpy.data.meshes.new_from_object(obj.evaluated_get(depsgraph), depsgraph=depsgraph)
+    mesh.name = mesh_name
+    mesh_obj = bpy.data.objects.new(mesh_name, mesh)
+    for collection in obj.users_collection or [bpy.context.scene.collection]:
+        collection.objects.link(mesh_obj)
+    mesh_obj.matrix_world = obj.matrix_world.copy()
+
+    def restore() -> None:
+        current = bpy.data.objects.get(mesh_name)
+        if current is not None:
+            bpy.data.objects.remove(current, do_unlink=True)
+
+    _record_undo("convert curve copy to mesh", restore)
+    return {"source": obj.name, "mesh_name": mesh_obj.name, "vertices": len(mesh.vertices), "polygons": len(mesh.polygons)}
+
+
 def set_point_profile(params: dict[str, Any], field: str) -> dict[str, Any]:
     obj = _curve(params["object_name"])
     point = _point(_spline(obj, params["spline_index"]), params["point_index"])
