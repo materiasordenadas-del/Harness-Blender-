@@ -4,13 +4,13 @@ V0 **no se considera estable ni debe fusionarse a `main`** hasta completar los t
 
 ## A. Pruebas automáticas fuera de Blender
 
-- [ ] `python -m pytest` pasa completamente.
-- [ ] El bridge no contiene `exec()` ni acepta un campo `code`.
-- [ ] Un token incorrecto es rechazado.
-- [ ] Una operación desconocida es rechazada.
-- [ ] Campos y parámetros desconocidos son rechazados.
-- [ ] Vectores de tamaño incorrecto, valores no finitos o fuera de límites son rechazados.
-- [ ] No existe un token operativo fijo por defecto.
+- [x] `python -m pytest` pasa completamente.
+- [x] El bridge no contiene `exec()` ni acepta un campo `code`.
+- [x] Un token incorrecto es rechazado.
+- [x] Una operación desconocida es rechazada.
+- [x] Campos y parámetros desconocidos son rechazados.
+- [x] Vectores de tamaño incorrecto, valores no finitos o fuera de límites son rechazados.
+- [x] No existe un token operativo fijo por defecto.
 
 ## B. Integración con Blender en modo background
 
@@ -58,3 +58,13 @@ Con el add-on instalado y Blender abierto:
 14. Una petición manual al socket que incluya `code` es rechazada aunque el token sea correcto.
 
 Registrar versión exacta de Blender, sistema operativo y resultado de cada paso antes de fusionar PR #1.
+
+## Registro de validación
+
+Validado el 2026-08-07 en Windows con Blender 5.2.0 LTS.
+
+- Pruebas unitarias: `19 passed`.
+- Blender background: `HARNESS_BLENDER_BACKGROUND_INTEGRATION_OK`.
+- GUI/timer: creación, borrado y recuperación validados desde el mismo tipo de timer que usa el bridge.
+- MCP E2E: add-on instalado, servidor MCP real por stdio y bridge TCP local; las diez herramientas V0 completaron el escenario de aceptación.
+- Seguridad por socket: token incorrecto, campo `code`, operación desconocida y parámetro inválido fueron rechazados.
