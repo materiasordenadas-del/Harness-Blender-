@@ -4,18 +4,64 @@ from __future__ import annotations
 
 import base64
 import json
+import os
+from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP, Image
 
 from .connection import BlenderConnection
+from .docs_index import initialize as initialize_docs, search as search_docs
+from .router import route
+from .skill_registry import content as skill_content, discover as discover_skills
 
 mcp = FastMCP("Harness Blender V1")
 _connection = BlenderConnection()
 
 
+def _docs_path() -> Path:
+    return Path(os.getenv("HARNESS_DOCS_INDEX", Path.cwd() / "config" / "v3_docs.sqlite"))
+
+
+def _ensure_docs() -> Path:
+    path = _docs_path()
+    if not path.exists():
+        initialize_docs(path)
+    return path
+
+
 def _run(operation: str, params: dict[str, Any] | None = None) -> str:
     return json.dumps(_connection.call(operation, params), ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def route_blender_task(task: str) -> str:
+    """Return only the V3 skills, official docs and tools relevant to a task."""
+    result = route(task)
+    return json.dumps({"task": result.task, "skills": result.skills, "tools": result.tools, "docs": result.docs}, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def list_blender_skills(domain: str | None = None) -> str:
+    """List local skill metadata; optional domain filters without loading skill bodies."""
+    skills = discover_skills()
+    if domain:
+        skills = [skill for skill in skills if skill.domain == domain]
+    return json.dumps([{"name": skill.name, "domain": skill.domain, "applies_to": skill.applies_to, "tools": skill.tools} for skill in skills], ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def get_blender_skill(name: str) -> str:
+    """Load the Markdown body of one named local skill on demand."""
+    return skill_content(name)
+
+
+@mcp.tool()
+def search_blender_docs(query: str, limit: int = 5) -> str:
+    """Search the local index of official docs.blender.org entries."""
+    if not 1 <= limit <= 10:
+        raise ValueError("limit must be between 1 and 10")
+    return json.dumps(search_docs(_ensure_docs(), query, limit), ensure_ascii=False, indent=2)
 
 
 @mcp.tool()
@@ -414,6 +460,18 @@ def capabilities() -> str:
         ],
     }
     return json.dumps(payload, indent=2)
+
+
+@mcp.resource("harness://v3/skills")
+def v3_skills_resource() -> str:
+    """Read-only local skill metadata for V3 planning."""
+    return list_blender_skills()
+
+
+@mcp.resource("harness://v3/docs")
+def v3_docs_resource() -> str:
+    """Read-only catalog of the local official Blender documentation index."""
+    return search_blender_docs("bmesh OR boolean OR curve", 10)
 
 
 @mcp.resource("harness://v2/capabilities")

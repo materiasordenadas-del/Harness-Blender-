@@ -6,3 +6,4 @@ dist/
 build/
 *.blend1
 *.blend2
+*.sqlite
