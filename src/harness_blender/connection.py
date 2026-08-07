@@ -13,7 +13,6 @@ from .protocol import encode_request, receive_message
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 9876
 DEFAULT_TIMEOUT = 180.0
-DEFAULT_TOKEN = "harness-v0-local"
 
 
 @dataclass
@@ -21,12 +20,26 @@ class BlenderConnection:
     host: str = field(default_factory=lambda: os.getenv("BLENDER_HOST", DEFAULT_HOST))
     port: int = field(default_factory=lambda: int(os.getenv("BLENDER_PORT", str(DEFAULT_PORT))))
     timeout: float = field(default_factory=lambda: float(os.getenv("BLENDER_TIMEOUT", str(DEFAULT_TIMEOUT))))
-    token: str = field(default_factory=lambda: os.getenv("BLENDER_TOKEN", DEFAULT_TOKEN))
+    token: str = field(default_factory=lambda: os.getenv("BLENDER_TOKEN", ""))
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
 
-    def execute(self, code: str, *, strict_json: bool = True) -> dict[str, Any]:
-        """Execute trusted harness-generated Python in Blender and return its result."""
-        request = {"type": "execute", "code": code, "strict_json": strict_json, "token": self.token}
+    def __post_init__(self) -> None:
+        if self.host not in {"127.0.0.1", "localhost"}:
+            raise ValueError("Harness Blender V0 only permits loopback hosts")
+
+    def call(self, operation: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Call one semantic V0 operation in Blender."""
+        if not self.token:
+            raise RuntimeError(
+                "BLENDER_TOKEN is not configured. Copy the generated Access Token "
+                "from Blender's Harness Blender Bridge preferences."
+            )
+        request = {
+            "type": "operation",
+            "operation": operation,
+            "params": params or {},
+            "token": self.token,
+        }
         with self._lock:
             try:
                 with socket.create_connection((self.host, self.port), timeout=self.timeout) as sock:
@@ -36,16 +49,11 @@ class BlenderConnection:
             except OSError as exc:
                 raise ConnectionError(
                     f"Could not reach Blender bridge at {self.host}:{self.port}. "
-                    "Open Blender, enable Harness Blender Bridge, and start the server."
+                    "Open Blender, enable Harness Blender Bridge, and start the bridge."
                 ) from exc
 
         if response.get("status") != "ok":
-            message = response.get("message", "Unknown Blender bridge error")
-            stderr = response.get("stderr")
-            if stderr:
-                message = f"{message}\n{stderr}"
-            raise RuntimeError(str(message))
-
+            raise RuntimeError(str(response.get("message", "Unknown Blender bridge error")))
         result = response.get("result", {})
         if not isinstance(result, dict):
             raise RuntimeError("Blender bridge returned a non-object result")
