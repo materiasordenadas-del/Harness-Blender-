@@ -49,6 +49,12 @@ def inspect_curve(object_name: str) -> str:
 
 
 @mcp.tool()
+def inspect_mesh_detailed(object_name: str) -> str:
+    """Inspect mesh topology, manifold state, polygon types and materials."""
+    return _run("inspect_mesh_detailed", {"object_name": object_name})
+
+
+@mcp.tool()
 def add_curve_point(object_name: str, spline_index: int, co: list[float]) -> str:
     """Append one editable point to a single-spline curve."""
     return _run("add_curve_point", {"object_name": object_name, "spline_index": spline_index, "co": co})

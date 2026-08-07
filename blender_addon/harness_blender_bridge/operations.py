@@ -33,6 +33,7 @@ def _record_undo(label: str, restore: Callable[[], None]) -> None:
 
 
 from . import curve_operations
+from . import mesh_operations
 
 
 def _object(name: str) -> bpy.types.Object:
@@ -317,6 +318,7 @@ OPERATIONS: dict[str, Operation] = {
     "transform_object": _op_transform_object,
     "delete_object": _op_delete_object,
     "validate_mesh": _op_validate_mesh,
+    "inspect_mesh_detailed": mesh_operations.inspect_mesh_detailed,
     "save_blend": _op_save_blend,
     "undo": _op_undo,
     "capture_screen": _op_capture_screen,

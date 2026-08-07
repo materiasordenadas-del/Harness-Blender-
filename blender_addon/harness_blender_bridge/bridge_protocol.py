@@ -23,6 +23,7 @@ ALLOWED_OPERATIONS = {
     "transform_object",
     "delete_object",
     "validate_mesh",
+    "inspect_mesh_detailed",
     "save_blend",
     "undo",
     "capture_screen",
@@ -128,7 +129,7 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
     if operation in {"ping", "inspect_scene", "undo", "capture_screen"}:
         return _no_params(params, operation)
 
-    if operation in {"inspect_object", "delete_object", "validate_mesh"}:
+    if operation in {"inspect_object", "delete_object", "validate_mesh", "inspect_mesh_detailed"}:
         _reject_unknown_keys(params, {"object_name"}, where=f"{operation} parameter")
         if "object_name" not in params:
             raise ProtocolError(f"{operation} requires object_name")
