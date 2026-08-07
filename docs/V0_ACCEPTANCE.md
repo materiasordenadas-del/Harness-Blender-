@@ -1,14 +1,60 @@
 # Criterios de aceptación de V0
 
-V0 se considera funcional cuando, desde un cliente MCP:
+V0 **no se considera estable ni debe fusionarse a `main`** hasta completar los tres niveles siguientes.
 
-1. `blender_ping` devuelve la versión de Blender.
-2. `inspect_scene` enumera los objetos existentes.
-3. `create_primitive` crea un objeto con nombre explícito.
-4. `transform_object` modifica su transformación.
-5. `inspect_object` confirma el estado resultante.
-6. `validate_mesh` devuelve métricas sin modificar la malla.
-7. `capture_blender_screen` devuelve una imagen PNG en modo gráfico.
-8. `save_blend` guarda el archivo solicitado.
-9. El token incorrecto es rechazado.
-10. Ninguna herramienta MCP acepta código Python proporcionado por el modelo.
+## A. Pruebas automáticas fuera de Blender
+
+- [ ] `python -m pytest` pasa completamente.
+- [ ] El bridge no contiene `exec()` ni acepta un campo `code`.
+- [ ] Un token incorrecto es rechazado.
+- [ ] Una operación desconocida es rechazada.
+- [ ] Campos y parámetros desconocidos son rechazados.
+- [ ] Vectores de tamaño incorrecto, valores no finitos o fuera de límites son rechazados.
+- [ ] No existe un token operativo fijo por defecto.
+
+## B. Integración con Blender en modo background
+
+Ejecutar con Blender 5.1+:
+
+```text
+blender --background --factory-startup --python tests/blender_background_integration.py
+```
+
+Debe finalizar mostrando:
+
+```text
+HARNESS_BLENDER_BACKGROUND_INTEGRATION_OK
+```
+
+La prueba comprueba:
+
+1. ping;
+2. inspección de escena;
+3. creación de un cubo;
+4. transformación;
+5. inspección del objeto;
+6. validación de malla;
+7. separación correcta entre `boundary_edges`, `loose_edges` y `non_manifold_edges`;
+8. borrado mediante una operación compatible con undo;
+9. `undo` recupera el objeto borrado.
+
+## C. End-to-end real MCP ↔ Blender gráfico
+
+Con el add-on instalado y Blender abierto:
+
+1. El add-on genera un token aleatorio al activarse.
+2. Copiar ese token a `BLENDER_TOKEN` del servidor MCP.
+3. `blender_ping` devuelve la versión de Blender.
+4. `inspect_scene` enumera los objetos existentes.
+5. `create_primitive` crea `V0_Test`.
+6. `transform_object` lo mueve a `[2, 0, 1]`.
+7. `inspect_object` confirma esa transformación.
+8. `validate_mesh` informa `boundary_edges=0` y `non_manifold_edges=0` para el cubo cerrado.
+9. `delete_object` elimina `V0_Test`.
+10. `undo_last_action` recupera `V0_Test`.
+11. `capture_blender_screen` devuelve un PNG válido.
+12. `save_blend` guarda un `.blend` de prueba en una ruta absoluta.
+13. Una petición con token incorrecto es rechazada.
+14. Una petición manual al socket que incluya `code` es rechazada aunque el token sea correcto.
+
+Registrar versión exacta de Blender, sistema operativo y resultado de cada paso antes de fusionar PR #1.
