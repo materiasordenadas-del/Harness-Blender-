@@ -97,6 +97,24 @@ def set_base_color(material_name: str, base_color: list[float]) -> str:
 
 
 @mcp.tool()
+def set_roughness(material_name: str, roughness: float) -> str:
+    """Set Principled roughness from 0 to 1."""
+    return _run("set_roughness", {"material_name": material_name, "roughness": roughness})
+
+
+@mcp.tool()
+def set_metallic(material_name: str, metallic: float) -> str:
+    """Set Principled metallic from 0 to 1."""
+    return _run("set_metallic", {"material_name": material_name, "metallic": metallic})
+
+
+@mcp.tool()
+def set_alpha(material_name: str, alpha: float) -> str:
+    """Set Principled alpha from 0 to 1."""
+    return _run("set_alpha", {"material_name": material_name, "alpha": alpha})
+
+
+@mcp.tool()
 def add_modifier(object_name: str, name: str, modifier_type: str) -> str:
     """Add one modifier from the V2 allowlist, reversibly."""
     return _run("add_modifier", {"object_name": object_name, "name": name, "modifier_type": modifier_type})
