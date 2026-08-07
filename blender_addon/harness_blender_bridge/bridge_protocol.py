@@ -18,12 +18,18 @@ ALLOWED_PRIMITIVES = {"cube", "uv_sphere", "cylinder", "cone", "torus"}
 ALLOWED_OPERATIONS = {
     "ping",
     "inspect_scene",
+    "inspect_scene_detailed",
+    "evaluate_mesh",
+    "evaluate_spatial",
+    "evaluate_tubular",
+    "evaluate_penetration",
     "inspect_object",
     "create_primitive",
     "transform_object",
     "delete_object",
     "validate_mesh",
     "inspect_mesh_detailed",
+    "evaluate_mesh",
     "recalculate_normals",
     "flip_normals",
     "subdivide_mesh",
@@ -139,10 +145,10 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
     if not isinstance(params, dict):
         raise ProtocolError("params must be a JSON object")
 
-    if operation in {"ping", "inspect_scene", "undo", "capture_screen"}:
+    if operation in {"ping", "inspect_scene", "inspect_scene_detailed", "undo", "capture_screen"}:
         return _no_params(params, operation)
 
-    if operation in {"inspect_object", "delete_object", "validate_mesh", "inspect_mesh_detailed"}:
+    if operation in {"inspect_object", "delete_object", "validate_mesh", "inspect_mesh_detailed", "evaluate_mesh"}:
         _reject_unknown_keys(params, {"object_name"}, where=f"{operation} parameter")
         if "object_name" not in params:
             raise ProtocolError(f"{operation} requires object_name")
@@ -209,6 +215,16 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         if "object_name" not in params:
             raise ProtocolError("inspect_curve requires object_name")
         return {"object_name": _name(params["object_name"], "object_name")}
+
+    if operation == "evaluate_spatial":
+        _reject_unknown_keys(params, {"object_name", "target_object_name"}, where="evaluate_spatial parameter")
+        return {"object_name": _name(params.get("object_name"), "object_name"), "target_object_name": _name(params.get("target_object_name"), "target_object_name")}
+    if operation == "evaluate_tubular":
+        _reject_unknown_keys(params, {"object_name", "spline_index"}, where="evaluate_tubular parameter")
+        return {"object_name": _name(params.get("object_name"), "object_name"), "spline_index": _integer(params.get("spline_index"), "spline_index", minimum=0, maximum=255)}
+    if operation == "evaluate_penetration":
+        _reject_unknown_keys(params, {"object_name", "target_object_name"}, where="evaluate_penetration parameter")
+        return {"object_name": _name(params.get("object_name"), "object_name"), "target_object_name": _name(params.get("target_object_name"), "target_object_name")}
 
     if operation == "recalculate_normals":
         _reject_unknown_keys(params, {"object_name", "outward"}, where="recalculate_normals parameter")

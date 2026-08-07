@@ -34,6 +34,7 @@ def _record_undo(label: str, restore: Callable[[], None]) -> None:
 
 from . import curve_operations
 from . import mesh_operations
+from . import evaluator_operations
 
 
 def _object(name: str) -> bpy.types.Object:
@@ -313,6 +314,11 @@ Operation = Callable[[dict[str, Any]], dict[str, Any]]
 OPERATIONS: dict[str, Operation] = {
     "ping": _op_ping,
     "inspect_scene": _op_inspect_scene,
+    "inspect_scene_detailed": evaluator_operations.inspect_scene_detailed,
+    "evaluate_mesh": evaluator_operations.evaluate_mesh,
+    "evaluate_spatial": evaluator_operations.evaluate_spatial,
+    "evaluate_tubular": evaluator_operations.evaluate_tubular,
+    "evaluate_penetration": evaluator_operations.evaluate_penetration,
     "inspect_object": _op_inspect_object,
     "create_primitive": _op_create_primitive,
     "transform_object": _op_transform_object,

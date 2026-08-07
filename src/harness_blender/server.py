@@ -12,6 +12,7 @@ from mcp.server.fastmcp import FastMCP, Image
 
 from .connection import BlenderConnection
 from .docs_index import initialize as initialize_docs, search as search_docs
+from .evaluator import diff_reports
 from .router import route
 from .skill_registry import content as skill_content, discover as discover_skills
 
@@ -39,6 +40,12 @@ def route_blender_task(task: str) -> str:
     """Return only the V3 skills, official docs and tools relevant to a task."""
     result = route(task)
     return json.dumps({"task": result.task, "skills": result.skills, "tools": result.tools, "docs": result.docs}, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def diff_evaluation_reports(before: dict[str, Any], after: dict[str, Any]) -> str:
+    """Compare two V4 read-only evaluation reports without contacting Blender."""
+    return json.dumps(diff_reports(before, after), ensure_ascii=False, indent=2)
 
 
 @mcp.tool()
@@ -77,6 +84,12 @@ def inspect_scene() -> str:
 
 
 @mcp.tool()
+def inspect_scene_detailed() -> str:
+    """Read hierarchy, collections, modifiers and mesh/curve metrics without editing Blender."""
+    return _run("inspect_scene_detailed")
+
+
+@mcp.tool()
 def inspect_object(object_name: str) -> str:
     """Inspect one object, including transform, mesh counts, modifiers and materials."""
     return _run("inspect_object", {"object_name": object_name})
@@ -98,6 +111,30 @@ def inspect_curve(object_name: str) -> str:
 def inspect_mesh_detailed(object_name: str) -> str:
     """Inspect mesh topology, manifold state, polygon types and materials."""
     return _run("inspect_mesh_detailed", {"object_name": object_name})
+
+
+@mcp.tool()
+def evaluate_mesh(object_name: str) -> str:
+    """Measure mesh topology, area, volume and world bounding box without editing it."""
+    return _run("evaluate_mesh", {"object_name": object_name})
+
+
+@mcp.tool()
+def evaluate_spatial(object_name: str, target_object_name: str) -> str:
+    """Measure world bounding-box overlap and nearest-box distance without editing Blender."""
+    return _run("evaluate_spatial", {"object_name": object_name, "target_object_name": target_object_name})
+
+
+@mcp.tool()
+def evaluate_tubular(object_name: str, spline_index: int = 0) -> str:
+    """Measure curve radii, thickness progression, centerline and approximate curvature."""
+    return _run("evaluate_tubular", {"object_name": object_name, "spline_index": spline_index})
+
+
+@mcp.tool()
+def evaluate_penetration(object_name: str, target_object_name: str) -> str:
+    """Measure intersecting face pairs between two meshes without editing Blender."""
+    return _run("evaluate_penetration", {"object_name": object_name, "target_object_name": target_object_name})
 
 
 @mcp.tool()
@@ -495,6 +532,26 @@ def v2_capabilities() -> str:
         "not_yet_available": ["arbitrary model-generated Python", "Geometry Nodes authoring", "sculpt operations"],
     }
     return json.dumps(payload, indent=2)
+
+
+@mcp.resource("harness://v4/capabilities")
+def v4_capabilities() -> str:
+    """Describe the read-only V4 evaluation surface."""
+    payload = {
+        "version": "0.5.0-v4-evaluator",
+        "read_only": True,
+        "tools": [
+            "inspect_scene_detailed", "evaluate_mesh", "evaluate_spatial",
+            "evaluate_penetration", "evaluate_tubular", "diff_evaluation_reports",
+        ],
+        "limits": {
+            "spatial_distance": "axis-aligned world bounding boxes",
+            "penetration": "intersecting triangulated mesh surfaces",
+            "tubular": "editable CURVE with bevel_depth",
+        },
+        "not_yet_available": ["automatic correction", "Geometry Nodes authoring", "sculpt operations"],
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
 def main() -> None:

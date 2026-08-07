@@ -165,6 +165,9 @@ def main() -> None:
     assert spline["resolution_u"] == 16
     assert_close([spline["points"][1]["radius"]], [0.4])
     assert_close([spline["points"][1]["tilt"]], [0.25])
+    tubular = dispatch_operation("evaluate_tubular", {"object_name": "V1_Background_Curve", "spline_index": 0})
+    assert tubular["point_count"] == 4
+    assert tubular["maximum_thickness"] >= tubular["minimum_thickness"]
 
     bpy.ops.mesh.primitive_cube_add()
     merge_mesh = bpy.context.object
@@ -187,6 +190,28 @@ def main() -> None:
     assert bridged["faces_created"] == 4
     dispatch_operation("undo", {})
     assert len(loop_data.polygons) == 0
+
+    bpy.ops.mesh.primitive_cube_add(size=2, location=(0, 0, 0))
+    evaluated_mesh = bpy.context.object
+    evaluated_mesh.name = "V4_Evaluated_Mesh"
+    mesh_report = dispatch_operation("evaluate_mesh", {"object_name": evaluated_mesh.name})
+    assert mesh_report["is_closed_manifold"] is True
+    assert_close([mesh_report["surface_area"], mesh_report["volume"]], [24.0, 8.0])
+    assert mesh_report["self_intersections"] == 0
+    assert mesh_report["inconsistent_normal_edges"] == 0
+
+    bpy.ops.mesh.primitive_cube_add(size=2, location=(4, 0, 0))
+    target_mesh = bpy.context.object
+    target_mesh.name = "V4_Penetration_Target"
+    separated = dispatch_operation("evaluate_penetration", {"object_name": evaluated_mesh.name, "target_object_name": target_mesh.name})
+    assert separated["penetrates"] is False
+    target_mesh.location.x = 0.5
+    bpy.context.view_layer.update()
+    overlapping = dispatch_operation("evaluate_penetration", {"object_name": evaluated_mesh.name, "target_object_name": target_mesh.name})
+    assert overlapping["penetrates"] is True
+    spatial = dispatch_operation("evaluate_spatial", {"object_name": evaluated_mesh.name, "target_object_name": target_mesh.name})
+    assert spatial["bounding_box_overlap"] is True
+    assert_close([spatial["distance"]], [0.0])
 
     print("HARNESS_BLENDER_BACKGROUND_INTEGRATION_OK")
 
