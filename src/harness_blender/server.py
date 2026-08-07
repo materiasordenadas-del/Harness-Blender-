@@ -49,6 +49,144 @@ def inspect_curve(object_name: str) -> str:
 
 
 @mcp.tool()
+def inspect_mesh_detailed(object_name: str) -> str:
+    """Inspect mesh topology, manifold state, polygon types and materials."""
+    return _run("inspect_mesh_detailed", {"object_name": object_name})
+
+
+@mcp.tool()
+def recalculate_normals(object_name: str, outward: bool = True) -> str:
+    """Recalculate all mesh face normals outward or inward."""
+    return _run("recalculate_normals", {"object_name": object_name, "outward": outward})
+
+
+@mcp.tool()
+def flip_normals(object_name: str) -> str:
+    """Invert all mesh face normals reversibly."""
+    return _run("flip_normals", {"object_name": object_name})
+
+
+@mcp.tool()
+def subdivide_mesh(object_name: str, cuts: int) -> str:
+    """Subdivide all mesh edges with 1-4 cuts, reversibly."""
+    return _run("subdivide_mesh", {"object_name": object_name, "cuts": cuts})
+
+
+@mcp.tool()
+def smooth_mesh(object_name: str, factor: float) -> str:
+    """Smooth mesh vertices with a bounded factor from 0 to 1."""
+    return _run("smooth_mesh", {"object_name": object_name, "factor": factor})
+
+
+@mcp.tool()
+def create_material(name: str) -> str:
+    """Create a basic Principled material."""
+    return _run("create_material", {"name": name})
+
+
+@mcp.tool()
+def assign_material(object_name: str, material_name: str) -> str:
+    """Append a material to a mesh object."""
+    return _run("assign_material", {"object_name": object_name, "material_name": material_name})
+
+
+@mcp.tool()
+def set_base_color(material_name: str, base_color: list[float]) -> str:
+    """Set a material RGBA base color, values 0-1."""
+    return _run("set_base_color", {"material_name": material_name, "base_color": base_color})
+
+
+@mcp.tool()
+def set_roughness(material_name: str, roughness: float) -> str:
+    """Set Principled roughness from 0 to 1."""
+    return _run("set_roughness", {"material_name": material_name, "roughness": roughness})
+
+
+@mcp.tool()
+def set_metallic(material_name: str, metallic: float) -> str:
+    """Set Principled metallic from 0 to 1."""
+    return _run("set_metallic", {"material_name": material_name, "metallic": metallic})
+
+
+@mcp.tool()
+def set_alpha(material_name: str, alpha: float) -> str:
+    """Set Principled alpha from 0 to 1."""
+    return _run("set_alpha", {"material_name": material_name, "alpha": alpha})
+
+
+@mcp.tool()
+def add_modifier(object_name: str, name: str, modifier_type: str) -> str:
+    """Add one modifier from the V2 allowlist, reversibly."""
+    return _run("add_modifier", {"object_name": object_name, "name": name, "modifier_type": modifier_type})
+
+
+@mcp.tool()
+def set_modifier_parameter(object_name: str, modifier_name: str, parameter: str, value: float) -> str:
+    """Set a limited V2 modifier parameter: levels, thickness or ratio."""
+    return _run("set_modifier_parameter", {"object_name": object_name, "modifier_name": modifier_name, "parameter": parameter, "value": value})
+
+
+@mcp.tool()
+def remove_modifier(object_name: str, modifier_name: str) -> str:
+    """Remove a V2 modifier and restore its supported settings with undo."""
+    return _run("remove_modifier", {"object_name": object_name, "modifier_name": modifier_name})
+
+
+@mcp.tool()
+def apply_modifier(object_name: str, modifier_name: str) -> str:
+    """Apply one existing modifier and preserve a reversible Harness snapshot."""
+    return _run("apply_modifier", {"object_name": object_name, "modifier_name": modifier_name})
+
+
+@mcp.tool()
+def merge_vertices(object_name: str, vertex_indices: list[int]) -> str:
+    """Merge 2-256 vertices at their shared center, reversibly."""
+    return _run("merge_vertices", {"object_name": object_name, "vertex_indices": vertex_indices})
+
+
+@mcp.tool()
+def bridge_edge_loops(object_name: str, edge_indices: list[int]) -> str:
+    """Bridge two compatible boundary loops selected by their edge indices."""
+    return _run("bridge_edge_loops", {"object_name": object_name, "edge_indices": edge_indices})
+
+
+@mcp.tool()
+def fill_hole(object_name: str, boundary_edge_indices: list[int]) -> str:
+    """Fill one closed boundary loop chosen by edge indices, reversibly."""
+    return _run("fill_hole", {"object_name": object_name, "boundary_edge_indices": boundary_edge_indices})
+
+
+@mcp.tool()
+def boolean_union(object_name: str, target_object_name: str) -> str:
+    """Apply an exact Boolean union to one mesh, reversibly."""
+    return _run("boolean_union", {"object_name": object_name, "target_object_name": target_object_name})
+
+
+@mcp.tool()
+def boolean_difference(object_name: str, target_object_name: str) -> str:
+    """Apply an exact Boolean difference to one mesh, reversibly."""
+    return _run("boolean_difference", {"object_name": object_name, "target_object_name": target_object_name})
+
+
+@mcp.tool()
+def boolean_intersection(object_name: str, target_object_name: str) -> str:
+    """Apply an exact Boolean intersection to one mesh, reversibly."""
+    return _run("boolean_intersection", {"object_name": object_name, "target_object_name": target_object_name})
+
+
+@mcp.tool()
+def decimate_mesh(object_name: str, ratio: float) -> str:
+    """Apply Decimate with a ratio from 0.01 to 1, reversibly."""
+    return _run("decimate_mesh", {"object_name": object_name, "ratio": ratio})
+
+
+@mcp.tool()
+def voxel_remesh(object_name: str, voxel_size: float) -> str:
+    """Apply voxel remesh with an explicit, bounded voxel size."""
+    return _run("voxel_remesh", {"object_name": object_name, "voxel_size": voxel_size})
+
+
+@mcp.tool()
 def add_curve_point(object_name: str, spline_index: int, co: list[float]) -> str:
     """Append one editable point to a single-spline curve."""
     return _run("add_curve_point", {"object_name": object_name, "spline_index": spline_index, "co": co})
@@ -274,6 +412,29 @@ def capabilities() -> str:
             "automatic visual correction loop",
             "persistent memory",
         ],
+    }
+    return json.dumps(payload, indent=2)
+
+
+@mcp.resource("harness://v2/capabilities")
+def v2_capabilities() -> str:
+    """Describe the typed V2 mesh and material operations."""
+    payload = {
+        "version": "0.3.0-v2-mesh",
+        "transport": "typed operation + validated params; no Python source over socket",
+        "tools": [
+            "inspect_mesh_detailed", "recalculate_normals", "flip_normals",
+            "subdivide_mesh", "smooth_mesh", "merge_vertices", "bridge_edge_loops", "fill_hole",
+            "boolean_union", "boolean_difference", "boolean_intersection", "voxel_remesh", "decimate_mesh",
+            "create_material", "assign_material", "set_base_color", "set_roughness", "set_metallic", "set_alpha",
+            "add_modifier", "set_modifier_parameter", "apply_modifier", "remove_modifier", "undo_last_action",
+        ],
+        "limits": {
+            "vertex_or_edge_indices": "2-256 (bridge requires at least 6; fill requires at least 3)",
+            "subdivide_cuts": "1-4", "smooth_factor": "0-1", "decimate_ratio": "0.01-1",
+            "voxel_size": "0.001-1000", "material_values": "0-1",
+        },
+        "not_yet_available": ["arbitrary model-generated Python", "Geometry Nodes authoring", "sculpt operations"],
     }
     return json.dumps(payload, indent=2)
 

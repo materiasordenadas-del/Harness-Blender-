@@ -23,6 +23,20 @@ ALLOWED_OPERATIONS = {
     "transform_object",
     "delete_object",
     "validate_mesh",
+    "inspect_mesh_detailed",
+    "recalculate_normals",
+    "flip_normals",
+    "subdivide_mesh",
+    "smooth_mesh",
+    "create_material", "assign_material", "set_base_color", "set_roughness", "set_metallic", "set_alpha",
+    "add_modifier",
+    "set_modifier_parameter",
+    "remove_modifier",
+    "apply_modifier",
+    "merge_vertices", "bridge_edge_loops",
+    "fill_hole",
+    "boolean_union", "boolean_difference", "boolean_intersection",
+    "decimate_mesh", "voxel_remesh",
     "save_blend",
     "undo",
     "capture_screen",
@@ -128,7 +142,7 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
     if operation in {"ping", "inspect_scene", "undo", "capture_screen"}:
         return _no_params(params, operation)
 
-    if operation in {"inspect_object", "delete_object", "validate_mesh"}:
+    if operation in {"inspect_object", "delete_object", "validate_mesh", "inspect_mesh_detailed"}:
         _reject_unknown_keys(params, {"object_name"}, where=f"{operation} parameter")
         if "object_name" not in params:
             raise ProtocolError(f"{operation} requires object_name")
@@ -195,6 +209,95 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         if "object_name" not in params:
             raise ProtocolError("inspect_curve requires object_name")
         return {"object_name": _name(params["object_name"], "object_name")}
+
+    if operation == "recalculate_normals":
+        _reject_unknown_keys(params, {"object_name", "outward"}, where="recalculate_normals parameter")
+        if "object_name" not in params or not isinstance(params.get("outward", True), bool):
+            raise ProtocolError("recalculate_normals requires object_name and boolean outward")
+        return {"object_name": _name(params["object_name"], "object_name"), "outward": params.get("outward", True)}
+
+    if operation == "flip_normals":
+        _reject_unknown_keys(params, {"object_name"}, where="flip_normals parameter")
+        if "object_name" not in params:
+            raise ProtocolError("flip_normals requires object_name")
+        return {"object_name": _name(params["object_name"], "object_name")}
+
+    if operation == "subdivide_mesh":
+        _reject_unknown_keys(params, {"object_name", "cuts"}, where="subdivide_mesh parameter")
+        if "object_name" not in params or "cuts" not in params:
+            raise ProtocolError("subdivide_mesh requires object_name and cuts")
+        return {"object_name": _name(params["object_name"], "object_name"), "cuts": _integer(params["cuts"], "cuts", minimum=1, maximum=4)}
+
+    if operation == "smooth_mesh":
+        _reject_unknown_keys(params, {"object_name", "factor"}, where="smooth_mesh parameter")
+        if "object_name" not in params or "factor" not in params:
+            raise ProtocolError("smooth_mesh requires object_name and factor")
+        return {"object_name": _name(params["object_name"], "object_name"), "factor": _number(params["factor"], "factor", minimum=0.0, maximum=1.0)}
+
+    if operation == "create_material":
+        _reject_unknown_keys(params, {"name"}, where="create_material parameter")
+        return {"name": _name(params.get("name"), "name")}
+    if operation == "assign_material":
+        _reject_unknown_keys(params, {"object_name", "material_name"}, where="assign_material parameter")
+        return {"object_name": _name(params.get("object_name"), "object_name"), "material_name": _name(params.get("material_name"), "material_name")}
+    if operation == "set_base_color":
+        _reject_unknown_keys(params, {"material_name", "base_color"}, where="set_base_color parameter")
+        color = params.get("base_color")
+        if not isinstance(color, list) or len(color) != 4:
+            raise ProtocolError("base_color must contain four numbers")
+        return {"material_name": _name(params.get("material_name"), "material_name"), "base_color": [_number(value, "base_color", minimum=0, maximum=1) for value in color]}
+    if operation in {"set_roughness", "set_metallic", "set_alpha"}:
+        field = operation.removeprefix("set_")
+        _reject_unknown_keys(params, {"material_name", field}, where=f"{operation} parameter")
+        return {"material_name": _name(params.get("material_name"), "material_name"), field: _number(params.get(field), field, minimum=0, maximum=1)}
+    if operation == "add_modifier":
+        _reject_unknown_keys(params, {"object_name", "name", "modifier_type"}, where="add_modifier parameter")
+        allowed = {"SUBSURF", "SOLIDIFY", "SHRINKWRAP", "SMOOTH", "LAPLACIANSMOOTH", "DECIMATE", "REMESH", "BOOLEAN"}
+        if params.get("modifier_type") not in allowed:
+            raise ProtocolError("modifier_type is not in the V2 allowlist")
+        return {"object_name": _name(params.get("object_name"), "object_name"), "name": _name(params.get("name"), "name"), "modifier_type": params["modifier_type"]}
+    if operation == "set_modifier_parameter":
+        _reject_unknown_keys(params, {"object_name", "modifier_name", "parameter", "value"}, where="set_modifier_parameter parameter")
+        parameter = params.get("parameter")
+        limits = {"levels": ("SUBSURF", 0, 6, int), "thickness": ("SOLIDIFY", 0.0, 1000.0, float), "ratio": ("DECIMATE", 0.0, 1.0, float)}
+        if parameter not in limits:
+            raise ProtocolError("parameter is not allowed in V2")
+        modifier_type, low, high, kind = limits[parameter]
+        value = params.get("value")
+        if kind is int:
+            value = _integer(value, "value", minimum=low, maximum=high)
+        else:
+            value = _number(value, "value", minimum=low, maximum=high)
+        return {"object_name": _name(params.get("object_name"), "object_name"), "modifier_name": _name(params.get("modifier_name"), "modifier_name"), "parameter": parameter, "value": value}
+    if operation == "remove_modifier":
+        _reject_unknown_keys(params, {"object_name", "modifier_name"}, where="remove_modifier parameter")
+        return {"object_name": _name(params.get("object_name"), "object_name"), "modifier_name": _name(params.get("modifier_name"), "modifier_name")}
+    if operation == "apply_modifier":
+        _reject_unknown_keys(params, {"object_name", "modifier_name"}, where="apply_modifier parameter")
+        return {"object_name": _name(params.get("object_name"), "object_name"), "modifier_name": _name(params.get("modifier_name"), "modifier_name")}
+    if operation in {"merge_vertices", "bridge_edge_loops"}:
+        index_field = "vertex_indices" if operation == "merge_vertices" else "edge_indices"
+        _reject_unknown_keys(params, {"object_name", index_field}, where=f"{operation} parameter")
+        indices = params.get(index_field)
+        minimum = 2 if operation == "merge_vertices" else 6
+        if not isinstance(indices, list) or not minimum <= len(indices) <= 256 or len(set(indices)) != len(indices):
+            raise ProtocolError(f"{index_field} must contain {minimum}-256 unique indices")
+        return {"object_name": _name(params.get("object_name"), "object_name"), index_field: [_integer(item, index_field, minimum=0, maximum=1_000_000) for item in indices]}
+    if operation == "fill_hole":
+        _reject_unknown_keys(params, {"object_name", "boundary_edge_indices"}, where="fill_hole parameter")
+        indices = params.get("boundary_edge_indices")
+        if not isinstance(indices, list) or not 3 <= len(indices) <= 256 or len(set(indices)) != len(indices):
+            raise ProtocolError("boundary_edge_indices must contain 3-256 unique indices")
+        return {"object_name": _name(params.get("object_name"), "object_name"), "boundary_edge_indices": [_integer(item, "boundary_edge_indices", minimum=0, maximum=1_000_000) for item in indices]}
+    if operation in {"boolean_union", "boolean_difference", "boolean_intersection"}:
+        _reject_unknown_keys(params, {"object_name", "target_object_name"}, where=f"{operation} parameter")
+        return {"object_name": _name(params.get("object_name"), "object_name"), "target_object_name": _name(params.get("target_object_name"), "target_object_name")}
+    if operation == "decimate_mesh":
+        _reject_unknown_keys(params, {"object_name", "ratio"}, where="decimate_mesh parameter")
+        return {"object_name": _name(params.get("object_name"), "object_name"), "ratio": _number(params.get("ratio"), "ratio", minimum=0.01, maximum=1.0)}
+    if operation == "voxel_remesh":
+        _reject_unknown_keys(params, {"object_name", "voxel_size"}, where="voxel_remesh parameter")
+        return {"object_name": _name(params.get("object_name"), "object_name"), "voxel_size": _number(params.get("voxel_size"), "voxel_size", minimum=0.001, maximum=1000.0)}
 
     if operation in {"add_curve_point", "move_curve_point", "remove_curve_point"}:
         allowed = {"object_name", "spline_index", "point_index", "co"}

@@ -33,6 +33,7 @@ def _record_undo(label: str, restore: Callable[[], None]) -> None:
 
 
 from . import curve_operations
+from . import mesh_operations
 
 
 def _object(name: str) -> bpy.types.Object:
@@ -317,6 +318,29 @@ OPERATIONS: dict[str, Operation] = {
     "transform_object": _op_transform_object,
     "delete_object": _op_delete_object,
     "validate_mesh": _op_validate_mesh,
+    "inspect_mesh_detailed": mesh_operations.inspect_mesh_detailed,
+    "recalculate_normals": mesh_operations.recalculate_normals,
+    "flip_normals": mesh_operations.flip_normals,
+    "subdivide_mesh": mesh_operations.subdivide_mesh,
+    "smooth_mesh": mesh_operations.smooth_mesh,
+    "create_material": mesh_operations.create_material,
+    "assign_material": mesh_operations.assign_material,
+    "set_base_color": lambda params: mesh_operations.set_material_value(params, "Base Color", "base_color"),
+    "set_roughness": lambda params: mesh_operations.set_material_scalar(params, "Roughness", "roughness"),
+    "set_metallic": lambda params: mesh_operations.set_material_scalar(params, "Metallic", "metallic"),
+    "set_alpha": lambda params: mesh_operations.set_material_scalar(params, "Alpha", "alpha"),
+    "add_modifier": mesh_operations.add_modifier,
+    "set_modifier_parameter": mesh_operations.set_modifier_parameter,
+    "remove_modifier": mesh_operations.remove_modifier,
+    "apply_modifier": mesh_operations.apply_modifier,
+    "merge_vertices": mesh_operations.merge_vertices,
+    "bridge_edge_loops": mesh_operations.bridge_edge_loops,
+    "fill_hole": mesh_operations.fill_hole,
+    "boolean_union": lambda params: mesh_operations.boolean_operation(params, "UNION"),
+    "boolean_difference": lambda params: mesh_operations.boolean_operation(params, "DIFFERENCE"),
+    "boolean_intersection": lambda params: mesh_operations.boolean_operation(params, "INTERSECT"),
+    "decimate_mesh": mesh_operations.decimate_mesh,
+    "voxel_remesh": mesh_operations.voxel_remesh,
     "save_blend": _op_save_blend,
     "undo": _op_undo,
     "capture_screen": _op_capture_screen,
