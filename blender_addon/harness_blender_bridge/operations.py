@@ -331,6 +331,7 @@ OPERATIONS: dict[str, Operation] = {
     "set_alpha": lambda params: mesh_operations.set_material_scalar(params, "Alpha", "alpha"),
     "add_modifier": mesh_operations.add_modifier,
     "set_modifier_parameter": mesh_operations.set_modifier_parameter,
+    "remove_modifier": mesh_operations.remove_modifier,
     "save_blend": _op_save_blend,
     "undo": _op_undo,
     "capture_screen": _op_capture_screen,

@@ -127,6 +127,12 @@ def set_modifier_parameter(object_name: str, modifier_name: str, parameter: str,
 
 
 @mcp.tool()
+def remove_modifier(object_name: str, modifier_name: str) -> str:
+    """Remove a V2 modifier and restore its supported settings with undo."""
+    return _run("remove_modifier", {"object_name": object_name, "modifier_name": modifier_name})
+
+
+@mcp.tool()
 def add_curve_point(object_name: str, spline_index: int, co: list[float]) -> str:
     """Append one editable point to a single-spline curve."""
     return _run("add_curve_point", {"object_name": object_name, "spline_index": spline_index, "co": co})

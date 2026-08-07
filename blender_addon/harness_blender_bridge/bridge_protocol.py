@@ -31,6 +31,7 @@ ALLOWED_OPERATIONS = {
     "create_material", "assign_material", "set_base_color", "set_roughness", "set_metallic", "set_alpha",
     "add_modifier",
     "set_modifier_parameter",
+    "remove_modifier",
     "save_blend",
     "undo",
     "capture_screen",
@@ -263,6 +264,9 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         else:
             value = _number(value, "value", minimum=low, maximum=high)
         return {"object_name": _name(params.get("object_name"), "object_name"), "modifier_name": _name(params.get("modifier_name"), "modifier_name"), "parameter": parameter, "value": value}
+    if operation == "remove_modifier":
+        _reject_unknown_keys(params, {"object_name", "modifier_name"}, where="remove_modifier parameter")
+        return {"object_name": _name(params.get("object_name"), "object_name"), "modifier_name": _name(params.get("modifier_name"), "modifier_name")}
 
     if operation in {"add_curve_point", "move_curve_point", "remove_curve_point"}:
         allowed = {"object_name", "spline_index", "point_index", "co"}

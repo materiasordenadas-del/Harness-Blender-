@@ -189,3 +189,22 @@ def set_modifier_parameter(params: dict[str, Any]) -> dict[str, Any]:
     setattr(modifier, field, value)
     _record_undo("set modifier parameter", lambda: setattr(modifier, field, previous))
     return {"object_name": obj.name, "modifier_name": modifier.name, "parameter": field, "value": getattr(modifier, field)}
+
+
+def remove_modifier(params: dict[str, Any]) -> dict[str, Any]:
+    obj = _mesh_object(params["object_name"])
+    modifier = obj.modifiers.get(params["modifier_name"])
+    if modifier is None:
+        raise ValueError(f"Modifier not found: {params['modifier_name']}")
+    fields = {"SUBSURF": ("levels",), "SOLIDIFY": ("thickness",), "DECIMATE": ("ratio",)}.get(modifier.type, ())
+    state = {field: getattr(modifier, field) for field in fields}
+    name, modifier_type = modifier.name, modifier.type
+    obj.modifiers.remove(modifier)
+
+    def restore() -> None:
+        restored = obj.modifiers.new(name, modifier_type)
+        for field, value in state.items():
+            setattr(restored, field, value)
+
+    _record_undo("remove modifier", restore)
+    return {"object_name": obj.name, "removed": name, "modifier_type": modifier_type}
