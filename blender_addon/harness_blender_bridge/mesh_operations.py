@@ -30,3 +30,20 @@ def inspect_mesh_detailed(params: dict[str, Any]) -> dict[str, Any]:
                 "materials": [slot.material.name if slot.material else None for slot in obj.material_slots]}
     finally:
         bm.free()
+
+
+def recalculate_normals(params: dict[str, Any]) -> dict[str, Any]:
+    obj = bpy.data.objects.get(params["object_name"])
+    if obj is None or obj.type != "MESH":
+        raise TypeError("recalculate_normals requires an existing MESH object")
+    bm = bmesh.new()
+    try:
+        bm.from_mesh(obj.data)
+        bmesh.ops.recalc_face_normals(bm, faces=list(bm.faces))
+        if not params["outward"]:
+            bmesh.ops.reverse_faces(bm, faces=list(bm.faces))
+        bm.to_mesh(obj.data)
+        obj.data.update()
+    finally:
+        bm.free()
+    return {"name": obj.name, "orientation": "outside" if params["outward"] else "inside"}

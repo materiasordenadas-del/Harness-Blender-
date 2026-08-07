@@ -55,6 +55,12 @@ def inspect_mesh_detailed(object_name: str) -> str:
 
 
 @mcp.tool()
+def recalculate_normals(object_name: str, outward: bool = True) -> str:
+    """Recalculate all mesh face normals outward or inward."""
+    return _run("recalculate_normals", {"object_name": object_name, "outward": outward})
+
+
+@mcp.tool()
 def add_curve_point(object_name: str, spline_index: int, co: list[float]) -> str:
     """Append one editable point to a single-spline curve."""
     return _run("add_curve_point", {"object_name": object_name, "spline_index": spline_index, "co": co})

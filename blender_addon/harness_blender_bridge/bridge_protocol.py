@@ -24,6 +24,7 @@ ALLOWED_OPERATIONS = {
     "delete_object",
     "validate_mesh",
     "inspect_mesh_detailed",
+    "recalculate_normals",
     "save_blend",
     "undo",
     "capture_screen",
@@ -196,6 +197,12 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         if "object_name" not in params:
             raise ProtocolError("inspect_curve requires object_name")
         return {"object_name": _name(params["object_name"], "object_name")}
+
+    if operation == "recalculate_normals":
+        _reject_unknown_keys(params, {"object_name", "outward"}, where="recalculate_normals parameter")
+        if "object_name" not in params or not isinstance(params.get("outward", True), bool):
+            raise ProtocolError("recalculate_normals requires object_name and boolean outward")
+        return {"object_name": _name(params["object_name"], "object_name"), "outward": params.get("outward", True)}
 
     if operation in {"add_curve_point", "move_curve_point", "remove_curve_point"}:
         allowed = {"object_name", "spline_index", "point_index", "co"}

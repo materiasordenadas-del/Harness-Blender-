@@ -319,6 +319,7 @@ OPERATIONS: dict[str, Operation] = {
     "delete_object": _op_delete_object,
     "validate_mesh": _op_validate_mesh,
     "inspect_mesh_detailed": mesh_operations.inspect_mesh_detailed,
+    "recalculate_normals": mesh_operations.recalculate_normals,
     "save_blend": _op_save_blend,
     "undo": _op_undo,
     "capture_screen": _op_capture_screen,
