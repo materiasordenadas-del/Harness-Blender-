@@ -12,6 +12,7 @@ from mcp.server.fastmcp import FastMCP, Image
 
 from .connection import BlenderConnection
 from .docs_index import initialize as initialize_docs, search as search_docs
+from .evaluator import diff_reports
 from .router import route
 from .skill_registry import content as skill_content, discover as discover_skills
 
@@ -39,6 +40,12 @@ def route_blender_task(task: str) -> str:
     """Return only the V3 skills, official docs and tools relevant to a task."""
     result = route(task)
     return json.dumps({"task": result.task, "skills": result.skills, "tools": result.tools, "docs": result.docs}, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def diff_evaluation_reports(before: dict[str, Any], after: dict[str, Any]) -> str:
+    """Compare two V4 read-only evaluation reports without contacting Blender."""
+    return json.dumps(diff_reports(before, after), ensure_ascii=False, indent=2)
 
 
 @mcp.tool()
