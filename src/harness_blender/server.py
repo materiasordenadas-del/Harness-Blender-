@@ -416,6 +416,29 @@ def capabilities() -> str:
     return json.dumps(payload, indent=2)
 
 
+@mcp.resource("harness://v2/capabilities")
+def v2_capabilities() -> str:
+    """Describe the typed V2 mesh and material operations."""
+    payload = {
+        "version": "0.3.0-v2-mesh",
+        "transport": "typed operation + validated params; no Python source over socket",
+        "tools": [
+            "inspect_mesh_detailed", "recalculate_normals", "flip_normals",
+            "subdivide_mesh", "smooth_mesh", "merge_vertices", "bridge_edge_loops", "fill_hole",
+            "boolean_union", "boolean_difference", "boolean_intersection", "voxel_remesh", "decimate_mesh",
+            "create_material", "assign_material", "set_base_color", "set_roughness", "set_metallic", "set_alpha",
+            "add_modifier", "set_modifier_parameter", "apply_modifier", "remove_modifier", "undo_last_action",
+        ],
+        "limits": {
+            "vertex_or_edge_indices": "2-256 (bridge requires at least 6; fill requires at least 3)",
+            "subdivide_cuts": "1-4", "smooth_factor": "0-1", "decimate_ratio": "0.01-1",
+            "voxel_size": "0.001-1000", "material_values": "0-1",
+        },
+        "not_yet_available": ["arbitrary model-generated Python", "Geometry Nodes authoring", "sculpt operations"],
+    }
+    return json.dumps(payload, indent=2)
+
+
 def main() -> None:
     """Run the MCP server over stdio."""
     mcp.run()
