@@ -208,3 +208,53 @@ def remove_modifier(params: dict[str, Any]) -> dict[str, Any]:
 
     _record_undo("remove modifier", restore)
     return {"object_name": obj.name, "removed": name, "modifier_type": modifier_type}
+
+
+def _modifier_state(modifier: bpy.types.Modifier) -> dict[str, Any]:
+    fields = {"SUBSURF": ("levels",), "SOLIDIFY": ("thickness",), "DECIMATE": ("ratio",)}.get(modifier.type, ())
+    return {
+        "name": modifier.name,
+        "type": modifier.type,
+        "settings": {field: getattr(modifier, field) for field in fields},
+        "show_viewport": modifier.show_viewport,
+        "show_render": modifier.show_render,
+    }
+
+
+def _restore_modifier(obj: bpy.types.Object, state: dict[str, Any]) -> None:
+    modifier = obj.modifiers.get(state["name"]) or obj.modifiers.new(state["name"], state["type"])
+    modifier.show_viewport = state["show_viewport"]
+    modifier.show_render = state["show_render"]
+    for field, value in state["settings"].items():
+        setattr(modifier, field, value)
+
+
+def apply_modifier(params: dict[str, Any]) -> dict[str, Any]:
+    obj = _mesh_object(params["object_name"])
+    modifier = obj.modifiers.get(params["modifier_name"])
+    if modifier is None:
+        raise ValueError(f"Modifier not found: {params['modifier_name']}")
+    topology = _topology_snapshot(obj.data)
+    state = _modifier_state(modifier)
+    previous_active = bpy.context.view_layer.objects.active
+    previous_selection = tuple(bpy.context.selected_objects)
+    try:
+        for selected in previous_selection:
+            selected.select_set(False)
+        obj.select_set(True)
+        bpy.context.view_layer.objects.active = obj
+        status = bpy.ops.object.modifier_apply(modifier=modifier.name)
+        if "FINISHED" not in status:
+            raise RuntimeError(f"Blender modifier_apply returned {sorted(status)}")
+    finally:
+        obj.select_set(False)
+        for selected in previous_selection:
+            selected.select_set(True)
+        bpy.context.view_layer.objects.active = previous_active
+
+    def restore() -> None:
+        _restore_topology(obj.data, topology)
+        _restore_modifier(obj, state)
+
+    _record_undo("apply modifier", restore)
+    return {"object_name": obj.name, "applied": state["name"], "modifier_type": state["type"], "vertices": len(obj.data.vertices), "faces": len(obj.data.polygons)}

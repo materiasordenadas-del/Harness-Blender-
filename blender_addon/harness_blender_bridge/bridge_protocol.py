@@ -32,6 +32,7 @@ ALLOWED_OPERATIONS = {
     "add_modifier",
     "set_modifier_parameter",
     "remove_modifier",
+    "apply_modifier",
     "save_blend",
     "undo",
     "capture_screen",
@@ -266,6 +267,9 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         return {"object_name": _name(params.get("object_name"), "object_name"), "modifier_name": _name(params.get("modifier_name"), "modifier_name"), "parameter": parameter, "value": value}
     if operation == "remove_modifier":
         _reject_unknown_keys(params, {"object_name", "modifier_name"}, where="remove_modifier parameter")
+        return {"object_name": _name(params.get("object_name"), "object_name"), "modifier_name": _name(params.get("modifier_name"), "modifier_name")}
+    if operation == "apply_modifier":
+        _reject_unknown_keys(params, {"object_name", "modifier_name"}, where="apply_modifier parameter")
         return {"object_name": _name(params.get("object_name"), "object_name"), "modifier_name": _name(params.get("modifier_name"), "modifier_name")}
 
     if operation in {"add_curve_point", "move_curve_point", "remove_curve_point"}:

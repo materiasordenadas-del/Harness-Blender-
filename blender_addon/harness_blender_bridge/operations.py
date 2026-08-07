@@ -332,6 +332,7 @@ OPERATIONS: dict[str, Operation] = {
     "add_modifier": mesh_operations.add_modifier,
     "set_modifier_parameter": mesh_operations.set_modifier_parameter,
     "remove_modifier": mesh_operations.remove_modifier,
+    "apply_modifier": mesh_operations.apply_modifier,
     "save_blend": _op_save_blend,
     "undo": _op_undo,
     "capture_screen": _op_capture_screen,
