@@ -7,6 +7,7 @@ import base64
 from contextlib import contextmanager
 from dataclasses import dataclass
 import math
+import os
 import tempfile
 from pathlib import Path
 from typing import Any, Callable, Iterator
@@ -310,6 +311,63 @@ def _op_capture_screen(_params: dict[str, Any]) -> dict[str, Any]:
     return {"format": "png", "png_base64": base64.b64encode(data).decode("ascii")}
 
 
+def _op_capture_controlled_view(params: dict[str, Any]) -> dict[str, Any]:
+    """Capture a fixed GUI viewport view and restore the user's view afterward."""
+    if bpy.app.background:
+        raise RuntimeError("Controlled view capture requires Blender GUI mode")
+    temp_root = os.getenv("HARNESS_BLENDER_TEMP_DIR")
+    if not temp_root:
+        raise RuntimeError("Set HARNESS_BLENDER_TEMP_DIR to a writable directory before visual capture")
+    directory = Path(temp_root)
+    if not directory.is_absolute() or not directory.is_dir():
+        raise RuntimeError("HARNESS_BLENDER_TEMP_DIR must be an existing absolute directory")
+    focus = _object(params["focus_object"]) if params["focus_object"] else None
+    for window in bpy.context.window_manager.windows:
+        screen = window.screen
+        for area in screen.areas:
+            if area.type != "VIEW_3D":
+                continue
+            region = next((item for item in area.regions if item.type == "WINDOW"), None)
+            if region is None:
+                continue
+            space = area.spaces.active
+            region_3d = space.region_3d
+            saved_view = (region_3d.view_distance, region_3d.view_location.copy(), region_3d.view_rotation.copy(), region_3d.view_perspective)
+            saved_active = window.view_layer.objects.active
+            saved_selected = tuple(item for item in window.view_layer.objects if item.select_get())
+            try:
+                with bpy.context.temp_override(window=window, screen=screen, area=area, region=region, scene=window.scene, view_layer=window.view_layer):
+                    if focus is not None:
+                        for item in bpy.context.selected_objects:
+                            item.select_set(False)
+                        focus.select_set(True)
+                        bpy.context.view_layer.objects.active = focus
+                    view = params["view"]
+                    if view != "perspective":
+                        status = bpy.ops.view3d.view_axis(type=view.upper(), align_active=False, relative=False)
+                        if "FINISHED" not in status:
+                            raise RuntimeError(f"Blender could not set {view} view")
+                    if focus is not None and params["frame_selected"]:
+                        status = bpy.ops.view3d.view_selected(use_all_regions=False)
+                        if "FINISHED" not in status:
+                            raise RuntimeError("Blender could not frame the focused object")
+                    with tempfile.TemporaryDirectory(prefix="harness_blender_", dir=directory) as temporary:
+                        target = Path(temporary) / "controlled_view.png"
+                        status = bpy.ops.screen.screenshot(filepath=str(target))
+                        if "FINISHED" not in status or not target.exists():
+                            raise RuntimeError(f"Blender screenshot operator returned {sorted(status)}")
+                        data = target.read_bytes()
+                return {"format": "png", "png_base64": base64.b64encode(data).decode("ascii"), "view": view, "focus_object": focus.name if focus else None, "framed": bool(focus and params["frame_selected"])}
+            finally:
+                region_3d.view_distance, region_3d.view_location, region_3d.view_rotation, region_3d.view_perspective = saved_view
+                for item in window.view_layer.objects:
+                    item.select_set(False)
+                for item in saved_selected:
+                    item.select_set(True)
+                window.view_layer.objects.active = saved_active
+    raise RuntimeError("A Blender VIEW_3D window is required for controlled view capture")
+
+
 Operation = Callable[[dict[str, Any]], dict[str, Any]]
 OPERATIONS: dict[str, Operation] = {
     "ping": _op_ping,
@@ -350,6 +408,7 @@ OPERATIONS: dict[str, Operation] = {
     "save_blend": _op_save_blend,
     "undo": _op_undo,
     "capture_screen": _op_capture_screen,
+    "capture_controlled_view": _op_capture_controlled_view,
     "create_curve": curve_operations.create_curve,
     "inspect_curve": curve_operations.inspect_curve,
     "add_curve_point": curve_operations.add_point,

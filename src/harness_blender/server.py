@@ -453,6 +453,23 @@ def capture_blender_screen() -> Image:
     return Image(data=data, format="png")
 
 
+@mcp.tool()
+def capture_controlled_view(
+    view: str = "perspective", focus_object: str | None = None, frame_selected: bool = True
+) -> Image:
+    """Capture a fixed GUI viewport view, optionally focused on one object, then restore the prior view."""
+    result = _connection.call("capture_controlled_view", {
+        "view": view, "focus_object": focus_object, "frame_selected": frame_selected,
+    })
+    encoded = result.get("png_base64")
+    if result.get("format") != "png" or not isinstance(encoded, str):
+        raise RuntimeError("Blender returned an invalid controlled-view PNG")
+    data = base64.b64decode(encoded, validate=True)
+    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise RuntimeError("Blender controlled-view response is not a PNG")
+    return Image(data=data, format="png")
+
+
 @mcp.resource("harness://v1/capabilities")
 def capabilities() -> str:
     """Describe the exact limits of V1 so the agent does not invent tools."""
@@ -550,6 +567,20 @@ def v4_capabilities() -> str:
             "tubular": "editable CURVE with bevel_depth",
         },
         "not_yet_available": ["automatic correction", "Geometry Nodes authoring", "sculpt operations"],
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+@mcp.resource("harness://v5/capabilities")
+def v5_capabilities() -> str:
+    """Describe the first V5 visual-capture capability."""
+    payload = {
+        "version": "0.6.0-v5-vision",
+        "tools": ["capture_controlled_view"],
+        "views": ["front", "back", "left", "right", "top", "bottom", "perspective"],
+        "requires_gui": True,
+        "temporary_directory": "HARNESS_BLENDER_TEMP_DIR",
+        "not_yet_available": ["visual verdict", "automatic correction loop"],
     }
     return json.dumps(payload, ensure_ascii=False, indent=2)
 

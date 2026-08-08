@@ -46,6 +46,7 @@ ALLOWED_OPERATIONS = {
     "save_blend",
     "undo",
     "capture_screen",
+    "capture_controlled_view",
     "create_curve",
     "inspect_curve",
     "add_curve_point",
@@ -147,6 +148,19 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
 
     if operation in {"ping", "inspect_scene", "inspect_scene_detailed", "undo", "capture_screen"}:
         return _no_params(params, operation)
+
+    if operation == "capture_controlled_view":
+        _reject_unknown_keys(params, {"view", "focus_object", "frame_selected"}, where="capture_controlled_view parameter")
+        view = params.get("view", "perspective")
+        if view not in {"front", "back", "left", "right", "top", "bottom", "perspective"}:
+            raise ProtocolError("view must be front, back, left, right, top, bottom or perspective")
+        focus_object = params.get("focus_object")
+        if focus_object is not None:
+            focus_object = _name(focus_object, "focus_object")
+        frame_selected = params.get("frame_selected", True)
+        if not isinstance(frame_selected, bool):
+            raise ProtocolError("frame_selected must be a boolean")
+        return {"view": view, "focus_object": focus_object, "frame_selected": frame_selected}
 
     if operation in {"inspect_object", "delete_object", "validate_mesh", "inspect_mesh_detailed", "evaluate_mesh"}:
         _reject_unknown_keys(params, {"object_name"}, where=f"{operation} parameter")

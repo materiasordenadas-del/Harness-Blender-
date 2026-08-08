@@ -104,3 +104,18 @@ def test_all_declared_operations_have_validation_paths():
         parsed, params = bridge_protocol.parse_operation_request(request(operation), TOKEN)
         assert parsed == operation
         assert params == {}
+
+
+def test_controlled_view_is_closed_and_normalized():
+    operation, params = bridge_protocol.parse_operation_request(
+        request("capture_controlled_view", {"view": "top", "focus_object": "Vessel", "frame_selected": True}), TOKEN
+    )
+    assert operation == "capture_controlled_view"
+    assert params == {"view": "top", "focus_object": "Vessel", "frame_selected": True}
+
+
+def test_controlled_view_rejects_unknown_view_and_extra_fields():
+    with pytest.raises(bridge_protocol.ProtocolError, match="view must be"):
+        bridge_protocol.parse_operation_request(request("capture_controlled_view", {"view": "diagonal"}), TOKEN)
+    with pytest.raises(bridge_protocol.ProtocolError, match="Unknown capture_controlled_view parameter"):
+        bridge_protocol.parse_operation_request(request("capture_controlled_view", {"unsafe": True}), TOKEN)
