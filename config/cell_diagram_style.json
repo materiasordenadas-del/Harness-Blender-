@@ -1,0 +1,74 @@
+{
+  "style_id": "harness-cell-diagram",
+  "version": "0.1.0",
+  "coordinate_system": {
+    "plane": "XY",
+    "camera": "ORTHOGRAPHIC",
+    "camera_axis": "-Z"
+  },
+  "layers": {
+    "background": 0.0,
+    "cell_body": 0.05,
+    "organelles": 0.1,
+    "membrane": 0.2,
+    "membrane_proteins": 0.3,
+    "pathways": 0.4,
+    "arrows": 0.5,
+    "labels": 0.6
+  },
+  "palette": {
+    "background": "#F7F9FB",
+    "cytoplasm_fill": "#EAF6FB",
+    "membrane_primary": "#35AEDD",
+    "membrane_secondary": "#8CD6F0",
+    "organelle_fill": "#BFDDF4",
+    "organelle_outline": "#168CC1",
+    "membrane_protein": "#F4C542",
+    "signaling_protein": "#63C95A",
+    "second_messenger": "#DDEB55",
+    "ion_primary": "#4E8EDC",
+    "vesicle": "#F0C94A",
+    "arrow": "#2C3136",
+    "label": "#20252A"
+  },
+  "line_weights": {
+    "membrane": 0.035,
+    "organelle": 0.03,
+    "protein_outline": 0.025,
+    "pathway": 0.018,
+    "arrow": 0.02,
+    "leader": 0.014
+  },
+  "text": {
+    "family": "sans",
+    "minimum_size": 0.16,
+    "default_size": 0.22,
+    "maximum_size": 0.4,
+    "align_x": "CENTER",
+    "align_y": "CENTER"
+  },
+  "symbols": {
+    "membrane": {"layer": "membrane", "material": "membrane_primary", "shape_family": "double_bilayer"},
+    "cytoplasm": {"layer": "cell_body", "material": "cytoplasm_fill", "shape_family": "filled_region"},
+    "organelle": {"layer": "organelles", "material": "organelle_fill", "shape_family": "outlined_region"},
+    "ion_channel": {"layer": "membrane_proteins", "material": "membrane_protein", "shape_family": "membrane_capsule"},
+    "pump": {"layer": "membrane_proteins", "material": "membrane_protein", "shape_family": "membrane_capsule"},
+    "exchanger": {"layer": "membrane_proteins", "material": "membrane_protein", "shape_family": "membrane_capsule"},
+    "receptor": {"layer": "membrane_proteins", "material": "membrane_protein", "shape_family": "receptor"},
+    "signaling_protein": {"layer": "pathways", "material": "signaling_protein", "shape_family": "ellipse"},
+    "second_messenger": {"layer": "pathways", "material": "second_messenger", "shape_family": "circle"},
+    "ion": {"layer": "pathways", "material": "ion_primary", "shape_family": "circle"},
+    "vesicle": {"layer": "organelles", "material": "vesicle", "shape_family": "circle"},
+    "activation_arrow": {"layer": "arrows", "material": "arrow", "shape_family": "arrow"},
+    "inhibition_line": {"layer": "arrows", "material": "arrow", "shape_family": "inhibition"},
+    "transport_arrow": {"layer": "arrows", "material": "arrow", "shape_family": "arrow"},
+    "label": {"layer": "labels", "material": "label", "shape_family": "text"}
+  },
+  "constraints": {
+    "colors_must_come_from_palette": true,
+    "z_must_match_symbol_layer": true,
+    "orthographic_camera_required": true,
+    "arbitrary_fonts_forbidden": true,
+    "style_override_requires_explicit_version_change": true
+  }
+}
