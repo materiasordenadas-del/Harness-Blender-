@@ -17,6 +17,12 @@ class Route:
 
 _RULES = (
     (
+        ("bezier", "bézier", "handle", "handles"),
+        ("curve-fundamentals", "smooth-curves"),
+        ("inspect_curve", "set_curve_handle_type", "set_curve_handle_position"),
+        ("https://docs.blender.org/api/current/bpy.types.BezierSplinePoint.html",),
+    ),
+    (
         ("geometry nodes", "geometry node", "nodos", "procedural", "procedimental", "tubo procedural"),
         ("procedural-tubes",),
         ("create_procedural_tube_setup", "inspect_geometry_node_tree", "evaluate_tubular", "evaluate_mesh"),

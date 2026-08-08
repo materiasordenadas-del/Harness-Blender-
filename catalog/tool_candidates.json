@@ -1,0 +1,5 @@
+{"candidates":[
+{"name":"sculpt_smooth_region","phase":"V7","object_types":["MESH"],"risk":"destructive geometry change","recovery":"mesh snapshot plus Harness undo","validation":"evaluate_mesh before and after; controlled visual review","source":"blender_mcp_n8n","status":"candidate"},
+{"name":"unwrap_uv","phase":"V7","object_types":["MESH"],"risk":"replaces UV coordinates","recovery":"UV-layer snapshot plus Harness undo","validation":"inspect_uv and overlap/coverage checks","source":"blender_mcp_n8n","status":"candidate"},
+{"name":"create_surface_scatter_setup","phase":"V6","object_types":["MESH","GEOMETRY_NODES"],"risk":"adds node group and modifier","recovery":"remove created modifier and unused node group","validation":"inspect_geometry_node_tree and evaluated-instance count","source":"blender_mcp_n8n","status":"candidate"}
+]}

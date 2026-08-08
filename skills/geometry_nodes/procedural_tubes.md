@@ -3,6 +3,7 @@ name: procedural-tubes
 domain: geometry_nodes
 applies_to: [curve, geometry_nodes]
 tools: [create_procedural_tube_setup, inspect_geometry_node_tree, evaluate_tubular, evaluate_mesh]
+sources: [blender_api, blender_manual, blender_mcp_n8n]
 ---
 
 # Tubos procedurales

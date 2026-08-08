@@ -13,6 +13,7 @@ class Skill:
     applies_to: tuple[str, ...]
     tools: tuple[str, ...]
     path: Path
+    sources: tuple[str, ...] = ()
 
 
 def default_skills_root() -> Path:
@@ -46,7 +47,7 @@ def discover(root: Path | None = None) -> list[Skill]:
         meta = _metadata(path)
         if not {"name", "domain", "applies_to", "tools"} <= set(meta):
             continue
-        skills.append(Skill(meta["name"], meta["domain"], _list(meta["applies_to"]), _list(meta["tools"]), path))
+        skills.append(Skill(meta["name"], meta["domain"], _list(meta["applies_to"]), _list(meta["tools"]), path, _list(meta.get("sources", ""))))
     return skills
 
 

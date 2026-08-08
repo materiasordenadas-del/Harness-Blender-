@@ -15,6 +15,9 @@ from .docs_index import initialize as initialize_docs, search as search_docs
 from .evaluator import diff_reports
 from .router import route
 from .skill_registry import content as skill_content, discover as discover_skills
+from .source_registry import load_sources
+from .task_packet import build_task_packet
+from .tool_catalog import list_candidates
 from .visual_review import next_visual_review_step as decide_next_visual_review_step, validate_visual_review
 
 mcp = FastMCP("Harness Blender V1")
@@ -44,6 +47,27 @@ def route_blender_task(task: str) -> str:
 
 
 @mcp.tool()
+def build_blender_task_packet(task: str) -> str:
+    """Return bounded skills, tools, checks and stop conditions for one task."""
+    return json.dumps(build_task_packet(task), ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def list_harness_sources() -> str:
+    """List curated, versioned research sources without contacting the network."""
+    return json.dumps(list(load_sources().values()), ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def list_tool_candidates(status: str | None = None) -> str:
+    """List research candidates only; this does not expose or execute new Blender tools."""
+    candidates = list_candidates()
+    if status is not None:
+        candidates = [item for item in candidates if item["status"] == status]
+    return json.dumps(candidates, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
 def diff_evaluation_reports(before: dict[str, Any], after: dict[str, Any]) -> str:
     """Compare two V4 read-only evaluation reports without contacting Blender."""
     return json.dumps(diff_reports(before, after), ensure_ascii=False, indent=2)
@@ -67,7 +91,7 @@ def list_blender_skills(domain: str | None = None) -> str:
     skills = discover_skills()
     if domain:
         skills = [skill for skill in skills if skill.domain == domain]
-    return json.dumps([{"name": skill.name, "domain": skill.domain, "applies_to": skill.applies_to, "tools": skill.tools} for skill in skills], ensure_ascii=False, indent=2)
+    return json.dumps([{"name": skill.name, "domain": skill.domain, "applies_to": skill.applies_to, "tools": skill.tools, "sources": skill.sources} for skill in skills], ensure_ascii=False, indent=2)
 
 
 @mcp.tool()
