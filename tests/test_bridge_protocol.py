@@ -143,3 +143,9 @@ def test_surface_scatter_setup_requires_distinct_objects_and_bounded_density():
     assert params["density"] == 2.5
     with pytest.raises(bridge_protocol.ProtocolError, match="must differ"):
         bridge_protocol.parse_operation_request(request("create_surface_scatter_setup", {"surface_object_name": "Surface", "instance_object_name": "Surface", "group_name": "Scatter", "density": 2.5}), TOKEN)
+
+
+def test_procedural_branching_requires_distinct_curve_names():
+    operation, params = bridge_protocol.parse_operation_request(request("create_procedural_branching_setup", {"main_curve_name": "Main", "branch_curve_names": ["Branch"], "group_name": "Branches", "profile_radius": 0.1, "resample_length": 0.2}), TOKEN)
+    assert operation == "create_procedural_branching_setup"
+    assert params["branch_curve_names"] == ["Branch"]

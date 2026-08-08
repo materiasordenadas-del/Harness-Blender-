@@ -241,6 +241,18 @@ def main() -> None:
     dispatch_operation("undo", {})
     assert not any(item.type == "NODES" for item in scatter_surface.modifiers)
 
+    branch_main = dispatch_operation("create_curve", {"name": "V6_Branch_Main", "spline_type": "POLY", "points": [[0, 0, 0], [0, 0, 2]]})
+    assert branch_main["name"] == "V6_Branch_Main"
+    branch_one = dispatch_operation("create_curve", {"name": "V6_Branch_One", "spline_type": "POLY", "points": [[0, 0, 1], [1, 0, 2]]})
+    branch_two = dispatch_operation("create_curve", {"name": "V6_Branch_Two", "spline_type": "POLY", "points": [[0, 0, 1], [-1, 0, 2]]})
+    assert branch_one["name"] == "V6_Branch_One" and branch_two["name"] == "V6_Branch_Two"
+    branching = dispatch_operation("create_procedural_branching_setup", {"main_curve_name": "V6_Branch_Main", "branch_curve_names": ["V6_Branch_One", "V6_Branch_Two"], "group_name": "V6_Background_Branching", "profile_radius": 0.1, "resample_length": 0.2})
+    assert branching["group_name"] == "V6_Background_Branching"
+    branching_tree = dispatch_operation("inspect_geometry_node_tree", {"object_name": "V6_Branch_Main"})
+    assert {node["name"] for node in branching_tree["nodes"]} >= {"Main Curve Input", "Join Branch Curves", "Resample Branching", "Profile Circle", "Branching Curve to Mesh", "Geometry Output"}
+    dispatch_operation("undo", {})
+    assert not any(item.type == "NODES" for item in bpy.data.objects["V6_Branch_Main"].modifiers)
+
     print("HARNESS_BLENDER_BACKGROUND_INTEGRATION_OK")
 
 

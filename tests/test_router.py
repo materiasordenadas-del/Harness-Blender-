@@ -35,5 +35,10 @@ def test_routes_surface_scatter_as_one_semantic_recipe():
     assert result.tools == ("inspect_mesh_detailed", "create_surface_scatter_setup", "inspect_geometry_node_tree", "evaluate_mesh")
 
 
+def test_routes_procedural_branching_as_one_semantic_recipe():
+    result = route("crea una ramificación procedural")
+    assert result.skills == ("procedural-branching",)
+
+
 def test_unknown_task_returns_safe_inspection_only():
     assert route("algo no clasificado").tools == ("inspect_scene",)

@@ -18,6 +18,8 @@ def enrich_task_packet(packet: dict[str, Any], snapshot: dict[str, Any]) -> dict
         requirements.append(("one CURVE input", bool(curves), "Select or create a CURVE input."))
     if "surface-scatter" in skills:
         requirements.append(("one MESH surface and a separate instance object", len(meshes) >= 2, "Identify a MESH surface and a different instance object."))
+    if "procedural-branching" in skills:
+        requirements.append(("one main CURVE and one branch CURVE", len(curves) >= 2, "Identify the main CURVE and at least one separate branch CURVE."))
     checks = [
         {"requirement": name, "status": "passed" if passed else "blocked", "remedy": remedy}
         for name, passed, remedy in requirements

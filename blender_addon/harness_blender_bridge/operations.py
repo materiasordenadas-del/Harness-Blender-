@@ -407,6 +407,17 @@ def _op_create_surface_scatter_setup(params: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _op_create_procedural_branching_setup(params: dict[str, Any]) -> dict[str, Any]:
+    result = geometry_nodes_operations.create_procedural_branching_setup(params)
+    def restore() -> None:
+        obj=bpy.data.objects.get(result["main_curve_name"]); mod=obj.modifiers.get(result["modifier_name"]) if obj else None
+        if mod: obj.modifiers.remove(mod)
+        group=bpy.data.node_groups.get(result["group_name"])
+        if group and group.users == 0: bpy.data.node_groups.remove(group)
+    _record_undo(f"create Geometry Nodes branching {result['group_name']}", restore)
+    return result
+
+
 Operation = Callable[[dict[str, Any]], dict[str, Any]]
 OPERATIONS: dict[str, Operation] = {
     "ping": _op_ping,
@@ -450,6 +461,7 @@ OPERATIONS: dict[str, Operation] = {
     "capture_controlled_view": _op_capture_controlled_view,
     "create_procedural_tube_setup": _op_create_procedural_tube_setup,
     "create_surface_scatter_setup": _op_create_surface_scatter_setup,
+    "create_procedural_branching_setup": _op_create_procedural_branching_setup,
     "inspect_geometry_node_tree": geometry_nodes_operations.inspect_geometry_node_tree,
     "create_curve": curve_operations.create_curve,
     "inspect_curve": curve_operations.inspect_curve,

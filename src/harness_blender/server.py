@@ -607,6 +607,12 @@ def create_surface_scatter_setup(surface_object_name: str, instance_object_name:
 
 
 @mcp.tool()
+def create_procedural_branching_setup(main_curve_name: str, branch_curve_names: list[str], group_name: str, profile_radius: float, resample_length: float) -> str:
+    """Attach a reversible procedural branching tube recipe to editable curves."""
+    return _run("create_procedural_branching_setup", {"main_curve_name": main_curve_name, "branch_curve_names": branch_curve_names, "group_name": group_name, "profile_radius": profile_radius, "resample_length": resample_length})
+
+
+@mcp.tool()
 def inspect_geometry_node_tree(object_name: str) -> str:
     """Inspect the Geometry Nodes group attached to one object."""
     return _run("inspect_geometry_node_tree", {"object_name": object_name})

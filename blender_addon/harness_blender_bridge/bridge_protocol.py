@@ -49,6 +49,7 @@ ALLOWED_OPERATIONS = {
     "capture_controlled_view",
     "create_procedural_tube_setup",
     "create_surface_scatter_setup",
+    "create_procedural_branching_setup",
     "inspect_geometry_node_tree",
     "create_curve",
     "inspect_curve",
@@ -184,6 +185,20 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         if surface == instance:
             raise ProtocolError("surface_object_name and instance_object_name must differ")
         return {"surface_object_name": surface, "instance_object_name": instance, "group_name": _name(params["group_name"], "group_name"), "density": _number(params["density"], "density", minimum=0.0001, maximum=1000.0)}
+
+    if operation == "create_procedural_branching_setup":
+        allowed = {"main_curve_name", "branch_curve_names", "group_name", "profile_radius", "resample_length"}
+        _reject_unknown_keys(params, allowed, where="create_procedural_branching_setup parameter")
+        if set(params) != allowed:
+            raise ProtocolError("create_procedural_branching_setup requires main curve, branches, group and dimensions")
+        branches = params["branch_curve_names"]
+        if not isinstance(branches, list) or not 1 <= len(branches) <= 16:
+            raise ProtocolError("branch_curve_names must contain 1-16 names")
+        main = _name(params["main_curve_name"], "main_curve_name")
+        normalized = [_name(name, "branch_curve_name") for name in branches]
+        if main in normalized or len(set(normalized)) != len(normalized):
+            raise ProtocolError("branch curves must be distinct from the main curve and each other")
+        return {"main_curve_name": main, "branch_curve_names": normalized, "group_name": _name(params["group_name"], "group_name"), "profile_radius": _number(params["profile_radius"], "profile_radius", minimum=0.001, maximum=1000.0), "resample_length": _number(params["resample_length"], "resample_length", minimum=0.001, maximum=1000.0)}
 
     if operation == "inspect_geometry_node_tree":
         _reject_unknown_keys(params, {"object_name"}, where="inspect_geometry_node_tree parameter")

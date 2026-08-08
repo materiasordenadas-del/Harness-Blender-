@@ -127,3 +127,36 @@ def create_surface_scatter_setup(params: dict[str, Any]) -> dict[str, Any]:
             surface.modifiers.remove(modifier)
         bpy.data.node_groups.remove(group)
         raise
+
+
+def create_procedural_branching_setup(params: dict[str, Any]) -> dict[str, Any]:
+    main = bpy.data.objects.get(params["main_curve_name"])
+    branches = [bpy.data.objects.get(name) for name in params["branch_curve_names"]]
+    if main is None or main.type != "CURVE" or any(item is None or item.type != "CURVE" for item in branches):
+        raise TypeError("procedural branching requires existing CURVE main and branch objects")
+    name = params["group_name"]
+    if bpy.data.node_groups.get(name) or main.modifiers.get(f"Harness {name}"):
+        raise ValueError("Branching group or modifier name already exists")
+    group = bpy.data.node_groups.new(name, "GeometryNodeTree"); modifier = None
+    try:
+        group.is_modifier = True
+        group.interface.new_socket(name="Geometry", in_out="INPUT", socket_type="NodeSocketGeometry")
+        group.interface.new_socket(name="Profile Radius", in_out="INPUT", socket_type="NodeSocketFloat").default_value = params["profile_radius"]
+        group.interface.new_socket(name="Resample Length", in_out="INPUT", socket_type="NodeSocketFloat").default_value = params["resample_length"]
+        group.interface.new_socket(name="Geometry", in_out="OUTPUT", socket_type="NodeSocketGeometry")
+        n, l = group.nodes, group.links
+        inp=n.new("NodeGroupInput"); inp.name="Main Curve Input"
+        join=n.new("GeometryNodeJoinGeometry"); join.name="Join Branch Curves"
+        for index, branch in enumerate(branches, 1):
+            info=n.new("GeometryNodeObjectInfo"); info.name=f"Branch {index}: {branch.name}"; info.transform_space="ORIGINAL"; info.inputs["Object"].default_value=branch; l.new(info.outputs["Geometry"], join.inputs["Geometry"])
+        l.new(inp.outputs["Geometry"], join.inputs["Geometry"])
+        resample=n.new("GeometryNodeResampleCurve"); resample.name="Resample Branching"; resample.inputs["Mode"].default_value="Length"
+        circle=n.new("GeometryNodeCurvePrimitiveCircle"); circle.name="Profile Circle"; circle.inputs["Resolution"].default_value=12
+        tube=n.new("GeometryNodeCurveToMesh"); tube.name="Branching Curve to Mesh"; tube.inputs["Fill Caps"].default_value=True
+        out=n.new("NodeGroupOutput"); out.name="Geometry Output"
+        l.new(join.outputs["Geometry"],resample.inputs["Curve"]); l.new(inp.outputs["Resample Length"],resample.inputs["Length"]); l.new(inp.outputs["Profile Radius"],circle.inputs["Radius"]); l.new(resample.outputs["Curve"],tube.inputs["Curve"]); l.new(circle.outputs["Curve"],tube.inputs["Profile Curve"]); l.new(tube.outputs["Mesh"],out.inputs["Geometry"])
+        modifier=main.modifiers.new(name=f"Harness {name}",type="NODES"); modifier.node_group=group; bpy.context.view_layer.update()
+        return {"main_curve_name":main.name,"branch_curve_names":[item.name for item in branches],"modifier_name":modifier.name,"group_name":group.name,"nodes":[node.name for node in n]}
+    except Exception:
+        if modifier: main.modifiers.remove(modifier)
+        bpy.data.node_groups.remove(group); raise
