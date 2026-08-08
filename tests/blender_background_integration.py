@@ -208,6 +208,17 @@ def main() -> None:
     assert uv_report["active_layer"] is not None
     assert uv_report["layers"][0]["loop_count"] == len(evaluated_mesh.data.loops)
     assert dispatch_operation("evaluate_uv_layout", {"object_name": evaluated_mesh.name})["status"] == "ready"
+    active_uv = evaluated_mesh.data.uv_layers.active
+    second_polygon = evaluated_mesh.data.polygons[1]
+    first_polygon = evaluated_mesh.data.polygons[0]
+    saved_second_uv = [tuple(active_uv.data[index].uv) for index in second_polygon.loop_indices]
+    for target, source in zip(second_polygon.loop_indices, first_polygon.loop_indices):
+        active_uv.data[target].uv = active_uv.data[source].uv
+    overlap_report = dispatch_operation("evaluate_uv_layout", {"object_name": evaluated_mesh.name})
+    assert overlap_report["overlapping_triangle_pairs"] > 0
+    assert "overlapping_uv_triangles" in overlap_report["issues"]
+    for index, coordinate in zip(second_polygon.loop_indices, saved_second_uv):
+        active_uv.data[index].uv = coordinate
     unwrapped = dispatch_operation("unwrap_uv", {"object_name": evaluated_mesh.name, "method": "ANGLE_BASED", "margin": 0.01})
     assert unwrapped["method"] == "ANGLE_BASED"
     assert unwrapped["uv"]["has_uv"] is True
