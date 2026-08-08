@@ -318,6 +318,31 @@ def twist_curve_part(object_name: str, part_name: str, angle_degrees: float) -> 
     """Twist a prepared curve part gradually from its protected base."""
     return _run("twist_curve_part", {"object_name": object_name, "part_name": part_name, "angle_degrees": angle_degrees})
 
+@mcp.tool()
+def propose_mesh_extension(object_name: str) -> str:
+    """Return a non-editing V8.2 mesh proposal that requires explicit extension and base selections."""
+    return _run("propose_mesh_extension", {"object_name": object_name})
+
+@mcp.tool()
+def prepare_mesh_extension(object_name: str, part_name: str, vertex_indices: list[int], base_vertex_indices: list[int]) -> str:
+    """Create a temporary visible mesh copy for one explicitly selected extension; the source mesh remains unchanged."""
+    return _run("prepare_mesh_extension", {"object_name": object_name, "part_name": part_name, "vertex_indices": vertex_indices, "base_vertex_indices": base_vertex_indices})
+
+@mcp.tool()
+def prepare_selected_mesh_extension(object_name: str, part_name: str) -> str:
+    """Create a temporary mesh copy from a visible Blender vertex selection; its attached boundary becomes the protected base."""
+    return _run("prepare_selected_mesh_extension", {"object_name": object_name, "part_name": part_name})
+
+@mcp.tool()
+def bend_mesh_part(object_name: str, angle_degrees: float) -> str:
+    """Bend a temporary V8.2 mesh copy while keeping its selected base vertices fixed."""
+    return _run("bend_mesh_part", {"object_name": object_name, "angle_degrees": angle_degrees})
+
+@mcp.tool()
+def reset_mesh_part(object_name: str) -> str:
+    """Restore the selected extension of a temporary V8.2 mesh copy from its unchanged source mesh."""
+    return _run("reset_mesh_part", {"object_name": object_name})
+
 
 @mcp.tool()
 def evaluate_spatial(object_name: str, target_object_name: str) -> str:

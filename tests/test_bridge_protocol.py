@@ -186,6 +186,16 @@ def test_curve_bend_is_bounded_and_requires_a_named_part():
     with pytest.raises(bridge_protocol.ProtocolError, match="between -180 and 180"):
         bridge_protocol.parse_operation_request(request("bend_curve_part", {"object_name": "Branch", "part_name": "Process_01", "angle_degrees": 181}), TOKEN)
 
+def test_mesh_extension_contract_requires_explicit_bounded_selection():
+    operation, params = bridge_protocol.parse_operation_request(request("prepare_mesh_extension", {
+        "object_name": "Torso", "part_name": "Process_01", "vertex_indices": [1, 2, 3], "base_vertex_indices": [1],
+    }), TOKEN)
+    assert operation == "prepare_mesh_extension" and params["vertex_indices"] == [1, 2, 3]
+    with pytest.raises(bridge_protocol.ProtocolError, match="must not contain duplicates"):
+        bridge_protocol.parse_operation_request(request("prepare_mesh_extension", {
+            "object_name": "Torso", "part_name": "Process_01", "vertex_indices": [1, 1], "base_vertex_indices": [1],
+        }), TOKEN)
+
 
 def test_uv_inspection_is_typed_and_read_only():
     operation, params = bridge_protocol.parse_operation_request(

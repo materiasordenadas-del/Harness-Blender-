@@ -25,6 +25,7 @@ ALLOWED_OPERATIONS = {
     "inspect_movable_structure", "prepare_movable_structure", "list_movable_parts", "get_part_state", "reset_structure",
     "bend_curve_part", "reset_curve_part",
     "move_curve_part", "twist_curve_part",
+    "propose_mesh_extension", "prepare_selected_mesh_extension", "prepare_mesh_extension", "bend_mesh_part", "reset_mesh_part",
     "evaluate_spatial",
     "evaluate_tubular",
     "evaluate_penetration",
@@ -136,6 +137,14 @@ def _integer(value: Any, field: str, *, minimum: int, maximum: int) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
         raise ProtocolError(f"{field} must be an integer between {minimum} and {maximum}")
     return value
+
+
+def _vertex_indices(value: Any, field: str) -> list[int]:
+    if not isinstance(value, list) or not value or len(value) > 200_000:
+        raise ProtocolError(f"{field} must contain 1-200000 vertex indices")
+    result = [_integer(item, field, minimum=0, maximum=10_000_000) for item in value]
+    if len(set(result)) != len(result): raise ProtocolError(f"{field} must not contain duplicates")
+    return result
 
 
 def _curve_point_target(params: dict[str, Any], operation: str, value_field: str) -> dict[str, Any]:
@@ -315,6 +324,31 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         _reject_unknown_keys(params, {"object_name", "part_name", "angle_degrees"}, where="twist_curve_part parameter")
         if set(params) != {"object_name", "part_name", "angle_degrees"}: raise ProtocolError("twist_curve_part requires object_name, part_name and angle_degrees")
         return {"object_name": _name(params["object_name"], "object_name"), "part_name": _name(params["part_name"], "part_name"), "angle_degrees": _number(params["angle_degrees"], "angle_degrees", minimum=-180.0, maximum=180.0)}
+
+    if operation == "prepare_mesh_extension":
+        _reject_unknown_keys(params, {"object_name", "part_name", "vertex_indices", "base_vertex_indices"}, where="prepare_mesh_extension parameter")
+        if set(params) != {"object_name", "part_name", "vertex_indices", "base_vertex_indices"}: raise ProtocolError("prepare_mesh_extension requires object_name, part_name, vertex_indices and base_vertex_indices")
+        return {"object_name": _name(params["object_name"], "object_name"), "part_name": _name(params["part_name"], "part_name"), "vertex_indices": _vertex_indices(params["vertex_indices"], "vertex_indices"), "base_vertex_indices": _vertex_indices(params["base_vertex_indices"], "base_vertex_indices")}
+
+    if operation == "prepare_selected_mesh_extension":
+        _reject_unknown_keys(params, {"object_name", "part_name"}, where="prepare_selected_mesh_extension parameter")
+        if set(params) != {"object_name", "part_name"}: raise ProtocolError("prepare_selected_mesh_extension requires object_name and part_name")
+        return {"object_name": _name(params["object_name"], "object_name"), "part_name": _name(params["part_name"], "part_name")}
+
+    if operation == "propose_mesh_extension":
+        _reject_unknown_keys(params, {"object_name"}, where="propose_mesh_extension parameter")
+        if set(params) != {"object_name"}: raise ProtocolError("propose_mesh_extension requires object_name")
+        return {"object_name": _name(params["object_name"], "object_name")}
+
+    if operation == "bend_mesh_part":
+        _reject_unknown_keys(params, {"object_name", "angle_degrees"}, where="bend_mesh_part parameter")
+        if set(params) != {"object_name", "angle_degrees"}: raise ProtocolError("bend_mesh_part requires object_name and angle_degrees")
+        return {"object_name": _name(params["object_name"], "object_name"), "angle_degrees": _number(params["angle_degrees"], "angle_degrees", minimum=-180.0, maximum=180.0)}
+
+    if operation == "reset_mesh_part":
+        _reject_unknown_keys(params, {"object_name"}, where="reset_mesh_part parameter")
+        if set(params) != {"object_name"}: raise ProtocolError("reset_mesh_part requires object_name")
+        return {"object_name": _name(params["object_name"], "object_name")}
 
     if operation == "unwrap_uv":
         allowed = {"object_name", "method", "margin"}

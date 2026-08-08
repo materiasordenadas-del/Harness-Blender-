@@ -197,6 +197,41 @@ def main() -> None:
     dispatch_operation("undo", {})  # undo preparation
     assert dispatch_operation("inspect_movable_structure", {"object_name": "V1_Background_Curve"})["prepared"] is False
 
+    v8_data = bpy.data.meshes.new("V8_Mesh_Source_Data")
+    v8_data.from_pydata([(0, 0, 0), (1, 0, 0), (2, 0, 1), (3, 0, 1)], [(0, 1), (1, 2), (2, 3)], [])
+    v8_source = bpy.data.objects.new("V8_Mesh_Source", v8_data)
+    bpy.context.scene.collection.objects.link(v8_source)
+    v8_source.name = "V8_Mesh_Source"
+    source_coordinates = [list(vertex.co) for vertex in v8_source.data.vertices]
+    for vertex in v8_source.data.vertices: vertex.select = vertex.index >= 1
+    prepared_mesh = dispatch_operation("prepare_selected_mesh_extension", {
+        "object_name": v8_source.name, "part_name": "Process_01",
+    })
+    v8_copy = bpy.data.objects[prepared_mesh["copy_object"]]
+    assert prepared_mesh["source_unchanged"] is True
+    assert [list(vertex.co) for vertex in v8_source.data.vertices] == source_coordinates
+    copy_base = list(v8_copy.data.vertices[1].co)
+    copy_tip = list(v8_copy.data.vertices[3].co)
+    bent_mesh = dispatch_operation("bend_mesh_part", {"object_name": v8_copy.name, "angle_degrees": 45})
+    assert bent_mesh["base_protected"] is True and bent_mesh["source_unchanged"] is True
+    assert bent_mesh["maximum_edge_stretch"] <= 1.5
+    assert_close(list(v8_copy.data.vertices[1].co), copy_base)
+    assert list(v8_copy.data.vertices[3].co) != copy_tip
+    assert [list(vertex.co) for vertex in v8_source.data.vertices] == source_coordinates
+    assert dispatch_operation("reset_mesh_part", {"object_name": v8_copy.name})["reset"] is True
+    assert_close(list(v8_copy.data.vertices[3].co), copy_tip)
+    try:
+        dispatch_operation("bend_mesh_part", {"object_name": v8_copy.name, "angle_degrees": 180})
+        raise AssertionError("unsafe mesh bend was not blocked")
+    except ValueError as exc:
+        assert "would stretch an edge" in str(exc)
+    assert_close(list(v8_copy.data.vertices[3].co), copy_tip)
+    dispatch_operation("undo", {})  # undo reset
+    dispatch_operation("undo", {})  # undo bend
+    assert_close(list(v8_copy.data.vertices[3].co), copy_tip)
+    dispatch_operation("undo", {})  # remove temporary copy
+    assert bpy.data.objects.get(prepared_mesh["copy_object"]) is None
+
     bpy.ops.mesh.primitive_cube_add()
     merge_mesh = bpy.context.object
     merge_mesh.name = "V2_Merge_Test"

@@ -453,6 +453,26 @@ def _op_reset_curve_part(params: dict[str, Any]) -> dict[str, Any]:
     _record_undo("reset curve part", lambda: movable_structure_operations.restore_curve_state(params["object_name"], previous))
     return result
 
+def _op_prepare_mesh_extension(params: dict[str, Any]) -> dict[str, Any]:
+    result, copy_name = movable_structure_operations.prepare_mesh_extension(params)
+    _record_undo("prepare mesh extension", lambda: movable_structure_operations.remove_mesh_copy(copy_name))
+    return result
+
+def _op_prepare_selected_mesh_extension(params: dict[str, Any]) -> dict[str, Any]:
+    result, copy_name = movable_structure_operations.prepare_selected_mesh_extension(params)
+    _record_undo("prepare selected mesh extension", lambda: movable_structure_operations.remove_mesh_copy(copy_name))
+    return result
+
+def _op_bend_mesh_part(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous = movable_structure_operations.bend_mesh_part(params)
+    _record_undo("bend mesh part", lambda: movable_structure_operations.restore_mesh_part(params["object_name"], previous))
+    return result
+
+def _op_reset_mesh_part(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous = movable_structure_operations.reset_mesh_part(params)
+    _record_undo("reset mesh part", lambda: movable_structure_operations.restore_mesh_part(params["object_name"], previous))
+    return result
+
 
 Operation = Callable[[dict[str, Any]], dict[str, Any]]
 OPERATIONS: dict[str, Operation] = {
@@ -468,6 +488,9 @@ OPERATIONS: dict[str, Operation] = {
     "reset_structure": _op_reset_structure,
     "bend_curve_part": _op_bend_curve_part, "reset_curve_part": _op_reset_curve_part,
     "move_curve_part": _op_move_curve_part, "twist_curve_part": _op_twist_curve_part,
+    "propose_mesh_extension": movable_structure_operations.propose_mesh_extension,
+    "prepare_selected_mesh_extension": _op_prepare_selected_mesh_extension,
+    "prepare_mesh_extension": _op_prepare_mesh_extension, "bend_mesh_part": _op_bend_mesh_part, "reset_mesh_part": _op_reset_mesh_part,
     "evaluate_spatial": evaluator_operations.evaluate_spatial,
     "evaluate_tubular": evaluator_operations.evaluate_tubular,
     "evaluate_penetration": evaluator_operations.evaluate_penetration,
