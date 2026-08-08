@@ -36,6 +36,7 @@ def _record_undo(label: str, restore: Callable[[], None]) -> None:
 from . import curve_operations
 from . import mesh_operations
 from . import evaluator_operations
+from . import geometry_nodes_operations
 
 
 def _object(name: str) -> bpy.types.Object:
@@ -368,6 +369,26 @@ def _op_capture_controlled_view(params: dict[str, Any]) -> dict[str, Any]:
     raise RuntimeError("A Blender VIEW_3D window is required for controlled view capture")
 
 
+def _op_create_procedural_tube_setup(params: dict[str, Any]) -> dict[str, Any]:
+    result = geometry_nodes_operations.create_procedural_tube_setup(params)
+    object_name = result["object_name"]
+    modifier_name = result["modifier_name"]
+    group_name = result["group_name"]
+
+    def restore() -> None:
+        obj = bpy.data.objects.get(object_name)
+        modifier = obj.modifiers.get(modifier_name) if obj else None
+        if modifier is not None:
+            obj.modifiers.remove(modifier)
+        group = bpy.data.node_groups.get(group_name)
+        if group is not None and group.users == 0:
+            bpy.data.node_groups.remove(group)
+        bpy.context.view_layer.update()
+
+    _record_undo(f"create Geometry Nodes tube {group_name}", restore)
+    return result
+
+
 Operation = Callable[[dict[str, Any]], dict[str, Any]]
 OPERATIONS: dict[str, Operation] = {
     "ping": _op_ping,
@@ -409,6 +430,8 @@ OPERATIONS: dict[str, Operation] = {
     "undo": _op_undo,
     "capture_screen": _op_capture_screen,
     "capture_controlled_view": _op_capture_controlled_view,
+    "create_procedural_tube_setup": _op_create_procedural_tube_setup,
+    "inspect_geometry_node_tree": geometry_nodes_operations.inspect_geometry_node_tree,
     "create_curve": curve_operations.create_curve,
     "inspect_curve": curve_operations.inspect_curve,
     "add_curve_point": curve_operations.add_point,

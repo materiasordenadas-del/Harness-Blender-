@@ -47,6 +47,8 @@ ALLOWED_OPERATIONS = {
     "undo",
     "capture_screen",
     "capture_controlled_view",
+    "create_procedural_tube_setup",
+    "inspect_geometry_node_tree",
     "create_curve",
     "inspect_curve",
     "add_curve_point",
@@ -161,6 +163,19 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         if not isinstance(frame_selected, bool):
             raise ProtocolError("frame_selected must be a boolean")
         return {"view": view, "focus_object": focus_object, "frame_selected": frame_selected}
+
+    if operation == "create_procedural_tube_setup":
+        _reject_unknown_keys(params, {"object_name", "group_name", "profile_radius", "resample_length"}, where="create_procedural_tube_setup parameter")
+        return {
+            "object_name": _name(params.get("object_name"), "object_name"),
+            "group_name": _name(params.get("group_name"), "group_name"),
+            "profile_radius": _number(params.get("profile_radius"), "profile_radius", minimum=0.001, maximum=1000.0),
+            "resample_length": _number(params.get("resample_length"), "resample_length", minimum=0.001, maximum=1000.0),
+        }
+
+    if operation == "inspect_geometry_node_tree":
+        _reject_unknown_keys(params, {"object_name"}, where="inspect_geometry_node_tree parameter")
+        return {"object_name": _name(params.get("object_name"), "object_name")}
 
     if operation in {"inspect_object", "delete_object", "validate_mesh", "inspect_mesh_detailed", "evaluate_mesh"}:
         _reject_unknown_keys(params, {"object_name"}, where=f"{operation} parameter")

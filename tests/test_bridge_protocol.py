@@ -119,3 +119,17 @@ def test_controlled_view_rejects_unknown_view_and_extra_fields():
         bridge_protocol.parse_operation_request(request("capture_controlled_view", {"view": "diagonal"}), TOKEN)
     with pytest.raises(bridge_protocol.ProtocolError, match="Unknown capture_controlled_view parameter"):
         bridge_protocol.parse_operation_request(request("capture_controlled_view", {"unsafe": True}), TOKEN)
+
+
+def test_procedural_tube_setup_is_typed_and_bounded():
+    operation, params = bridge_protocol.parse_operation_request(
+        request("create_procedural_tube_setup", {
+            "object_name": "Vessel", "group_name": "Vessel Tube", "profile_radius": 0.2, "resample_length": 0.5,
+        }), TOKEN,
+    )
+    assert operation == "create_procedural_tube_setup"
+    assert params["profile_radius"] == 0.2
+    with pytest.raises(bridge_protocol.ProtocolError, match="between"):
+        bridge_protocol.parse_operation_request(
+            request("create_procedural_tube_setup", {"object_name": "Vessel", "group_name": "Bad", "profile_radius": 0, "resample_length": 0.5}), TOKEN,
+        )

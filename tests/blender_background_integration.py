@@ -213,6 +213,21 @@ def main() -> None:
     assert spatial["bounding_box_overlap"] is True
     assert_close([spatial["distance"]], [0.0])
 
+    v6_setup = dispatch_operation("create_procedural_tube_setup", {
+        "object_name": "V1_Background_Curve", "group_name": "V6_Background_Tube",
+        "profile_radius": 0.15, "resample_length": 0.25,
+    })
+    assert v6_setup["group_name"] == "V6_Background_Tube"
+    v6_tree = dispatch_operation("inspect_geometry_node_tree", {"object_name": "V1_Background_Curve"})
+    assert {node["name"] for node in v6_tree["nodes"]} >= {"Curve Input", "Resample Curve", "Profile Circle", "Curve to Mesh", "Geometry Output"}
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    evaluated_curve = bpy.data.objects["V1_Background_Curve"].evaluated_get(depsgraph)
+    generated_mesh = bpy.data.meshes.new_from_object(evaluated_curve, depsgraph=depsgraph)
+    assert len(generated_mesh.vertices) > 0
+    bpy.data.meshes.remove(generated_mesh)
+    dispatch_operation("undo", {})
+    assert not any(item.type == "NODES" for item in bpy.data.objects["V1_Background_Curve"].modifiers)
+
     print("HARNESS_BLENDER_BACKGROUND_INTEGRATION_OK")
 
 
