@@ -88,14 +88,38 @@ def inspect_uv(params: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _uv_cross(first: Vector, second: Vector, third: Vector) -> float:
+    return float((second.x - first.x) * (third.y - first.y) - (second.y - first.y) * (third.x - first.x))
+
+
+def _point_in_uv_triangle(point: Vector, triangle: tuple[Vector, Vector, Vector]) -> bool:
+    values = [_uv_cross(triangle[index], triangle[(index + 1) % 3], point) for index in range(3)]
+    return all(value > 1e-9 for value in values) or all(value < -1e-9 for value in values)
+
+
+def _uv_triangles_overlap(first: tuple[Vector, Vector, Vector], second: tuple[Vector, Vector, Vector]) -> bool:
+    if all(any((left - right).length_squared <= 1e-18 for right in second) for left in first):
+        return True
+    if any(_point_in_uv_triangle(point, second) for point in first) or any(_point_in_uv_triangle(point, first) for point in second):
+        return True
+    for left in range(3):
+        a, b = first[left], first[(left + 1) % 3]
+        for right in range(3):
+            c, d = second[right], second[(right + 1) % 3]
+            if _uv_cross(a, b, c) * _uv_cross(a, b, d) < -1e-18 and _uv_cross(c, d, a) * _uv_cross(c, d, b) < -1e-18:
+                return True
+    return False
+
+
 def evaluate_uv_layout(params: dict[str, Any]) -> dict[str, Any]:
-    """Read-only UV quality checks, including degenerate UV faces and bounds."""
+    """Read-only UV quality checks, including positive-area triangle overlaps."""
     obj = _mesh_object(params["object_name"])
     layer = obj.data.uv_layers.active
     if layer is None:
-        return {"object_name": obj.name, "status": "needs_review", "issues": ["missing_uv_layer"], "zero_area_faces": 0, "outside_unit_square_loops": 0}
+        return {"object_name": obj.name, "status": "needs_review", "issues": ["missing_uv_layer"], "zero_area_faces": 0, "outside_unit_square_loops": 0, "overlapping_triangle_pairs": 0}
     zero_area = 0
     outside = 0
+    triangles: list[tuple[int, tuple[Vector, Vector, Vector]]] = []
     for loop in layer.data:
         if loop.uv.x < 0 or loop.uv.x > 1 or loop.uv.y < 0 or loop.uv.y > 1:
             outside += 1
@@ -104,12 +128,22 @@ def evaluate_uv_layout(params: dict[str, Any]) -> dict[str, Any]:
         area = sum(points[index].x * points[(index + 1) % len(points)].y - points[(index + 1) % len(points)].x * points[index].y for index in range(len(points))) / 2 if points else 0
         if abs(area) <= 1e-12:
             zero_area += 1
+        for index in range(1, len(points) - 1):
+            triangles.append((polygon.index, (points[0].copy(), points[index].copy(), points[index + 1].copy())))
+    overlaps = sum(
+        _uv_triangles_overlap(first, second)
+        for index, (first_polygon, first) in enumerate(triangles)
+        for second_polygon, second in triangles[index + 1:]
+        if first_polygon != second_polygon
+    )
     issues = []
     if zero_area:
         issues.append("zero_area_uv_faces")
     if outside:
         issues.append("outside_unit_square")
-    return {"object_name": obj.name, "status": "needs_review" if issues else "ready", "issues": issues, "zero_area_faces": zero_area, "outside_unit_square_loops": outside}
+    if overlaps:
+        issues.append("overlapping_uv_triangles")
+    return {"object_name": obj.name, "status": "needs_review" if issues else "ready", "issues": issues, "zero_area_faces": zero_area, "outside_unit_square_loops": outside, "overlapping_triangle_pairs": overlaps}
 
 
 def _uv_snapshot(mesh: bpy.types.Mesh) -> dict[str, Any]:
