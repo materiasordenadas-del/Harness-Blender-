@@ -23,6 +23,8 @@ ALLOWED_OPERATIONS = {
     "evaluate_asset_readiness",
     "inspect_rigging_structure",
     "inspect_movable_structure", "prepare_movable_structure", "list_movable_parts", "get_part_state", "reset_structure",
+    "bend_curve_part", "reset_curve_part",
+    "move_curve_part", "twist_curve_part",
     "evaluate_spatial",
     "evaluate_tubular",
     "evaluate_penetration",
@@ -293,6 +295,26 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         _reject_unknown_keys(params, {"object_name", "part_name"}, where="get_part_state parameter")
         if set(params) != {"object_name", "part_name"}: raise ProtocolError("get_part_state requires object_name and part_name")
         return {"object_name": _name(params["object_name"], "object_name"), "part_name": _name(params["part_name"], "part_name")}
+
+    if operation == "bend_curve_part":
+        _reject_unknown_keys(params, {"object_name", "part_name", "angle_degrees"}, where="bend_curve_part parameter")
+        if set(params) != {"object_name", "part_name", "angle_degrees"}: raise ProtocolError("bend_curve_part requires object_name, part_name and angle_degrees")
+        return {"object_name": _name(params["object_name"], "object_name"), "part_name": _name(params["part_name"], "part_name"), "angle_degrees": _number(params["angle_degrees"], "angle_degrees", minimum=-180.0, maximum=180.0)}
+
+    if operation == "reset_curve_part":
+        _reject_unknown_keys(params, {"object_name", "part_name"}, where="reset_curve_part parameter")
+        if set(params) != {"object_name", "part_name"}: raise ProtocolError("reset_curve_part requires object_name and part_name")
+        return {"object_name": _name(params["object_name"], "object_name"), "part_name": _name(params["part_name"], "part_name")}
+
+    if operation == "move_curve_part":
+        _reject_unknown_keys(params, {"object_name", "part_name", "offset"}, where="move_curve_part parameter")
+        if set(params) != {"object_name", "part_name", "offset"}: raise ProtocolError("move_curve_part requires object_name, part_name and offset")
+        return {"object_name": _name(params["object_name"], "object_name"), "part_name": _name(params["part_name"], "part_name"), "offset": _vec3(params["offset"], "offset")}
+
+    if operation == "twist_curve_part":
+        _reject_unknown_keys(params, {"object_name", "part_name", "angle_degrees"}, where="twist_curve_part parameter")
+        if set(params) != {"object_name", "part_name", "angle_degrees"}: raise ProtocolError("twist_curve_part requires object_name, part_name and angle_degrees")
+        return {"object_name": _name(params["object_name"], "object_name"), "part_name": _name(params["part_name"], "part_name"), "angle_degrees": _number(params["angle_degrees"], "angle_degrees", minimum=-180.0, maximum=180.0)}
 
     if operation == "unwrap_uv":
         allowed = {"object_name", "method", "margin"}

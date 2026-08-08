@@ -433,6 +433,26 @@ def _op_reset_structure(params: dict[str, Any]) -> dict[str, Any]:
     _record_undo("reset movable structure", lambda: movable_structure_operations.restore_metadata(params["object_name"], previous))
     return result
 
+def _op_bend_curve_part(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous = movable_structure_operations.bend_curve_part(params)
+    _record_undo("bend curve part", lambda: movable_structure_operations.restore_curve_state(params["object_name"], previous))
+    return result
+
+def _op_move_curve_part(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous = movable_structure_operations.move_curve_part(params)
+    _record_undo("move curve part", lambda: movable_structure_operations.restore_curve_state(params["object_name"], previous))
+    return result
+
+def _op_twist_curve_part(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous = movable_structure_operations.twist_curve_part(params)
+    _record_undo("twist curve part", lambda: movable_structure_operations.restore_curve_state(params["object_name"], previous))
+    return result
+
+def _op_reset_curve_part(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous = movable_structure_operations.reset_curve_part(params)
+    _record_undo("reset curve part", lambda: movable_structure_operations.restore_curve_state(params["object_name"], previous))
+    return result
+
 
 Operation = Callable[[dict[str, Any]], dict[str, Any]]
 OPERATIONS: dict[str, Operation] = {
@@ -446,6 +466,8 @@ OPERATIONS: dict[str, Operation] = {
     "inspect_movable_structure": movable_structure_operations.inspect, "prepare_movable_structure": _op_prepare_movable_structure,
     "list_movable_parts": movable_structure_operations.list_parts, "get_part_state": movable_structure_operations.get_part_state,
     "reset_structure": _op_reset_structure,
+    "bend_curve_part": _op_bend_curve_part, "reset_curve_part": _op_reset_curve_part,
+    "move_curve_part": _op_move_curve_part, "twist_curve_part": _op_twist_curve_part,
     "evaluate_spatial": evaluator_operations.evaluate_spatial,
     "evaluate_tubular": evaluator_operations.evaluate_tubular,
     "evaluate_penetration": evaluator_operations.evaluate_penetration,

@@ -181,6 +181,11 @@ def test_movable_structure_contract_is_typed_and_bounded():
     with pytest.raises(bridge_protocol.ProtocolError, match="curve_guided or mesh_guided"):
         bridge_protocol.parse_operation_request(request("prepare_movable_structure", {"object_name": "Branch", "mode": "automatic"}), TOKEN)
 
+def test_curve_bend_is_bounded_and_requires_a_named_part():
+    assert bridge_protocol.parse_operation_request(request("bend_curve_part", {"object_name": "Branch", "part_name": "Process_01", "angle_degrees": -30}), TOKEN)[1]["angle_degrees"] == -30.0
+    with pytest.raises(bridge_protocol.ProtocolError, match="between -180 and 180"):
+        bridge_protocol.parse_operation_request(request("bend_curve_part", {"object_name": "Branch", "part_name": "Process_01", "angle_degrees": 181}), TOKEN)
+
 
 def test_uv_inspection_is_typed_and_read_only():
     operation, params = bridge_protocol.parse_operation_request(

@@ -298,6 +298,26 @@ def reset_structure(object_name: str) -> str:
     """Restore registered movable parts to neutral state; can be undone."""
     return _run("reset_structure", {"object_name": object_name})
 
+@mcp.tool()
+def bend_curve_part(object_name: str, part_name: str, angle_degrees: float) -> str:
+    """Bend one prepared curve part while its base point stays fixed; reversible with reset_curve_part."""
+    return _run("bend_curve_part", {"object_name": object_name, "part_name": part_name, "angle_degrees": angle_degrees})
+
+@mcp.tool()
+def reset_curve_part(object_name: str, part_name: str) -> str:
+    """Restore the original editable curve shape saved before its first bend."""
+    return _run("reset_curve_part", {"object_name": object_name, "part_name": part_name})
+
+@mcp.tool()
+def move_curve_part(object_name: str, part_name: str, offset: list[float]) -> str:
+    """Move a prepared curve part gradually from its protected base."""
+    return _run("move_curve_part", {"object_name": object_name, "part_name": part_name, "offset": offset})
+
+@mcp.tool()
+def twist_curve_part(object_name: str, part_name: str, angle_degrees: float) -> str:
+    """Twist a prepared curve part gradually from its protected base."""
+    return _run("twist_curve_part", {"object_name": object_name, "part_name": part_name, "angle_degrees": angle_degrees})
+
 
 @mcp.tool()
 def evaluate_spatial(object_name: str, target_object_name: str) -> str:

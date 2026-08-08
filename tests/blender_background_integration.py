@@ -174,9 +174,27 @@ def main() -> None:
     assert movable["prepared"] is True and movable["parts"][1]["name"] == "Process_01"
     assert dispatch_operation("list_movable_parts", {"object_name": "V1_Background_Curve"})["prepared"] is True
     assert dispatch_operation("get_part_state", {"object_name": "V1_Background_Curve", "part_name": "Process_01"})["part"]["state"] == "neutral"
-    assert dispatch_operation("reset_structure", {"object_name": "V1_Background_Curve"})["reset"] is True
-    dispatch_operation("undo", {})
-    dispatch_operation("undo", {})
+    curve_base = list(bpy.data.objects["V1_Background_Curve"].data.splines[0].bezier_points[0].co)
+    curve_tip = list(bpy.data.objects["V1_Background_Curve"].data.splines[0].bezier_points[-1].co)
+    curve_tip_tilt = bpy.data.objects["V1_Background_Curve"].data.splines[0].bezier_points[-1].tilt
+    bent = dispatch_operation("bend_curve_part", {"object_name": "V1_Background_Curve", "part_name": "Process_01", "angle_degrees": -30})
+    assert bent["base_protected"] is True
+    assert_close(list(bpy.data.objects["V1_Background_Curve"].data.splines[0].bezier_points[0].co), curve_base)
+    assert list(bpy.data.objects["V1_Background_Curve"].data.splines[0].bezier_points[-1].co) != curve_tip
+    moved = dispatch_operation("move_curve_part", {"object_name": "V1_Background_Curve", "part_name": "Process_01", "offset": [0, 1, 0]})
+    assert moved["base_protected"] is True
+    twisted = dispatch_operation("twist_curve_part", {"object_name": "V1_Background_Curve", "part_name": "Process_01", "angle_degrees": 45})
+    assert twisted["base_protected"] is True
+    assert bpy.data.objects["V1_Background_Curve"].data.splines[0].bezier_points[-1].tilt != curve_tip_tilt
+    assert dispatch_operation("reset_curve_part", {"object_name": "V1_Background_Curve", "part_name": "Process_01"})["reset"] is True
+    assert_close(list(bpy.data.objects["V1_Background_Curve"].data.splines[0].bezier_points[-1].co), curve_tip)
+    assert_close([bpy.data.objects["V1_Background_Curve"].data.splines[0].bezier_points[-1].tilt], [curve_tip_tilt])
+    dispatch_operation("undo", {})  # restore the pose that existed before reset
+    dispatch_operation("undo", {})  # undo twist
+    assert_close([bpy.data.objects["V1_Background_Curve"].data.splines[0].bezier_points[-1].tilt], [curve_tip_tilt])
+    dispatch_operation("undo", {})  # undo move
+    dispatch_operation("undo", {})  # undo bend
+    dispatch_operation("undo", {})  # undo preparation
     assert dispatch_operation("inspect_movable_structure", {"object_name": "V1_Background_Curve"})["prepared"] is False
 
     bpy.ops.mesh.primitive_cube_add()
