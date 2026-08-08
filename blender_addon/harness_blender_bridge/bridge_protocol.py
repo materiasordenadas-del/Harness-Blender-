@@ -40,6 +40,7 @@ ALLOWED_OPERATIONS = {
     "remove_modifier",
     "apply_modifier",
     "merge_vertices", "bridge_edge_loops", "split_mesh_by_plane",
+    "inspect_active_selection", "split_selected_mesh_by_view_line",
     "fill_hole",
     "boolean_union", "boolean_difference", "boolean_intersection",
     "decimate_mesh", "voxel_remesh",
@@ -150,7 +151,7 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
     if not isinstance(params, dict):
         raise ProtocolError("params must be a JSON object")
 
-    if operation in {"ping", "inspect_scene", "inspect_scene_detailed", "undo", "capture_screen"}:
+    if operation in {"ping", "inspect_scene", "inspect_scene_detailed", "inspect_active_selection", "undo", "capture_screen"}:
         return _no_params(params, operation)
 
     if operation == "capture_controlled_view":
@@ -289,6 +290,25 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         if not isinstance(cap, bool):
             raise ProtocolError("cap must be a boolean")
         return {"object_name": source, "plane_point": _vec3(params["plane_point"], "plane_point"), "plane_normal": normal, "positive_name": positive, "negative_name": negative, "cap": cap}
+
+    if operation == "split_selected_mesh_by_view_line":
+        allowed = {"line_start", "line_end", "positive_name", "negative_name", "cap"}
+        _reject_unknown_keys(params, allowed, where="split_selected_mesh_by_view_line parameter")
+        if not {"line_start", "line_end", "positive_name", "negative_name"} <= set(params):
+            raise ProtocolError("split_selected_mesh_by_view_line requires a line and both output names")
+        def point(value: Any, field: str) -> list[float]:
+            if not isinstance(value, list) or len(value) != 2:
+                raise ProtocolError(f"{field} must be two normalized coordinates")
+            return [_number(value[0], field, minimum=0.0, maximum=1.0), _number(value[1], field, minimum=0.0, maximum=1.0)]
+        start, end = point(params["line_start"], "line_start"), point(params["line_end"], "line_end")
+        if start == end:
+            raise ProtocolError("line_start and line_end must differ")
+        positive, negative = _name(params["positive_name"], "positive_name"), _name(params["negative_name"], "negative_name")
+        if positive == negative:
+            raise ProtocolError("split output names must differ")
+        cap = params.get("cap", True)
+        if not isinstance(cap, bool): raise ProtocolError("cap must be a boolean")
+        return {"line_start": start, "line_end": end, "positive_name": positive, "negative_name": negative, "cap": cap}
 
     if operation == "evaluate_spatial":
         _reject_unknown_keys(params, {"object_name", "target_object_name"}, where="evaluate_spatial parameter")

@@ -8,6 +8,7 @@ from typing import Any
 import bmesh
 import bpy
 from mathutils import Vector
+from bpy_extras import view3d_utils
 
 from .operations import _record_undo
 
@@ -351,6 +352,27 @@ def split_mesh_by_plane(params: dict[str, Any]) -> dict[str, Any]:
 
     _record_undo("split mesh by plane", restore)
     return {"source_backup": obj.name, "positive_object": created[0].name, "negative_object": created[1].name, "source_hidden": True, "cap": params["cap"]}
+
+
+def split_selected_mesh_by_view_line(params: dict[str, Any]) -> dict[str, Any]:
+    active = bpy.context.view_layer.objects.active
+    if active is None or active.type != "MESH" or not active.select_get():
+        raise TypeError("Select one active MESH object before using a viewport cut line")
+    for window in bpy.context.window_manager.windows:
+        for area in window.screen.areas:
+            if area.type != "VIEW_3D": continue
+            region = next((item for item in area.regions if item.type == "WINDOW"), None)
+            if region is None: continue
+            space = area.spaces.active
+            def ray(point: list[float]) -> Vector:
+                coord = Vector((point[0] * region.width, point[1] * region.height))
+                return view3d_utils.region_2d_to_vector_3d(region, space.region_3d, coord)
+            first, second = ray(params["line_start"]), ray(params["line_end"])
+            normal = first.cross(second)
+            if normal.length == 0: raise ValueError("Viewport line cannot define a cut plane")
+            origin = view3d_utils.region_2d_to_origin_3d(region, space.region_3d, Vector((region.width / 2, region.height / 2)))
+            return split_mesh_by_plane({"object_name": active.name, "plane_point": list(origin), "plane_normal": list(normal.normalized()), "positive_name": params["positive_name"], "negative_name": params["negative_name"], "cap": params["cap"]})
+    raise RuntimeError("A Blender VIEW_3D window is required for viewport cut lines")
 
 
 def fill_hole(params: dict[str, Any]) -> dict[str, Any]:

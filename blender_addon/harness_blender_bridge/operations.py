@@ -418,11 +418,17 @@ def _op_create_procedural_branching_setup(params: dict[str, Any]) -> dict[str, A
     return result
 
 
+def _op_inspect_active_selection(_params: dict[str, Any]) -> dict[str, Any]:
+    active = bpy.context.view_layer.objects.active
+    return {"active_object": active.name if active else None, "active_type": active.type if active else None, "selected_objects": [obj.name for obj in bpy.context.selected_objects]}
+
+
 Operation = Callable[[dict[str, Any]], dict[str, Any]]
 OPERATIONS: dict[str, Operation] = {
     "ping": _op_ping,
     "inspect_scene": _op_inspect_scene,
     "inspect_scene_detailed": evaluator_operations.inspect_scene_detailed,
+    "inspect_active_selection": _op_inspect_active_selection,
     "evaluate_mesh": evaluator_operations.evaluate_mesh,
     "evaluate_spatial": evaluator_operations.evaluate_spatial,
     "evaluate_tubular": evaluator_operations.evaluate_tubular,
@@ -450,6 +456,7 @@ OPERATIONS: dict[str, Operation] = {
     "merge_vertices": mesh_operations.merge_vertices,
     "bridge_edge_loops": mesh_operations.bridge_edge_loops,
     "split_mesh_by_plane": mesh_operations.split_mesh_by_plane,
+    "split_selected_mesh_by_view_line": mesh_operations.split_selected_mesh_by_view_line,
     "fill_hole": mesh_operations.fill_hole,
     "boolean_union": lambda params: mesh_operations.boolean_operation(params, "UNION"),
     "boolean_difference": lambda params: mesh_operations.boolean_operation(params, "DIFFERENCE"),

@@ -359,6 +359,18 @@ def split_mesh_by_plane(object_name: str, plane_point: list[float], plane_normal
 
 
 @mcp.tool()
+def inspect_active_selection() -> str:
+    """Return Blender's active selected object so the user need not type its name."""
+    return _run("inspect_active_selection")
+
+
+@mcp.tool()
+def split_selected_mesh_by_view_line(line_start: list[float], line_end: list[float], positive_name: str, negative_name: str, cap: bool = True) -> str:
+    """Turn a normalized visible viewport line into a reversible cut of the active mesh."""
+    return _run("split_selected_mesh_by_view_line", {"line_start": line_start, "line_end": line_end, "positive_name": positive_name, "negative_name": negative_name, "cap": cap})
+
+
+@mcp.tool()
 def fill_hole(object_name: str, boundary_edge_indices: list[int]) -> str:
     """Fill one closed boundary loop chosen by edge indices, reversibly."""
     return _run("fill_hole", {"object_name": object_name, "boundary_edge_indices": boundary_edge_indices})
