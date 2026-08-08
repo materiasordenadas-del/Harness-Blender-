@@ -26,6 +26,8 @@ ALLOWED_OPERATIONS = {
     "bend_curve_part", "reset_curve_part",
     "move_curve_part", "twist_curve_part",
     "propose_mesh_extension", "prepare_selected_mesh_extension", "prepare_mesh_extension", "bend_mesh_part", "reset_mesh_part",
+    "create_v8_session", "inspect_v8_session", "reset_v8_session", "accept_v8_session", "discard_v8_session",
+    "pose_v8_control",
     "evaluate_spatial",
     "evaluate_tubular",
     "evaluate_penetration",
@@ -341,16 +343,41 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         return {"object_name": _name(params["object_name"], "object_name")}
 
     if operation == "bend_mesh_part":
-        _reject_unknown_keys(params, {"object_name", "angle_degrees", "bend_axis"}, where="bend_mesh_part parameter")
+        _reject_unknown_keys(params, {"object_name", "angle_degrees", "bend_axis", "screen_direction"}, where="bend_mesh_part parameter")
         if not {"object_name", "angle_degrees"}.issubset(params): raise ProtocolError("bend_mesh_part requires object_name and angle_degrees")
+        if "bend_axis" in params and "screen_direction" in params: raise ProtocolError("bend_mesh_part accepts bend_axis or screen_direction, not both")
         axis = params.get("bend_axis", "x")
         if axis not in {"x", "z"}: raise ProtocolError("bend_axis must be x or z")
-        return {"object_name": _name(params["object_name"], "object_name"), "angle_degrees": _number(params["angle_degrees"], "angle_degrees", minimum=-180.0, maximum=180.0), "bend_axis": axis}
+        direction = params.get("screen_direction")
+        if direction is not None and direction not in {"left", "right", "up", "down"}: raise ProtocolError("screen_direction must be left, right, up or down")
+        return {"object_name": _name(params["object_name"], "object_name"), "angle_degrees": _number(params["angle_degrees"], "angle_degrees", minimum=-180.0, maximum=180.0), "bend_axis": axis, "screen_direction": direction}
 
     if operation == "reset_mesh_part":
         _reject_unknown_keys(params, {"object_name"}, where="reset_mesh_part parameter")
         if set(params) != {"object_name"}: raise ProtocolError("reset_mesh_part requires object_name")
         return {"object_name": _name(params["object_name"], "object_name")}
+
+    if operation == "create_v8_session":
+        _reject_unknown_keys(params, {"session_name", "object_names"}, where="create_v8_session parameter")
+        session_name = _name(params.get("session_name", "Session"), "session_name")
+        names = params.get("object_names")
+        if names is not None:
+            if not isinstance(names, list) or not names:
+                raise ProtocolError("object_names must be a non-empty list when provided")
+            names = [_name(item, "object_name") for item in names]
+            if len(names) != len(set(names)): raise ProtocolError("object_names must be distinct")
+        return {"session_name": session_name, "object_names": names}
+
+    if operation in {"inspect_v8_session", "reset_v8_session", "accept_v8_session", "discard_v8_session"}:
+        _reject_unknown_keys(params, {"session_name"}, where=f"{operation} parameter")
+        if set(params) != {"session_name"}: raise ProtocolError(f"{operation} requires session_name")
+        return {"session_name": _name(params["session_name"], "session_name")}
+
+    if operation == "pose_v8_control":
+        allowed = {"session_name", "copy_object", "location", "rotation_degrees"}
+        _reject_unknown_keys(params, allowed, where="pose_v8_control parameter")
+        if not {"session_name", "copy_object"}.issubset(params): raise ProtocolError("pose_v8_control requires session_name and copy_object")
+        return {"session_name": _name(params["session_name"], "session_name"), "copy_object": _name(params["copy_object"], "copy_object"), "location": _vec3(params.get("location", [0, 0, 0]), "location"), "rotation_degrees": _vec3(params.get("rotation_degrees", [0, 0, 0]), "rotation_degrees")}
 
     if operation == "unwrap_uv":
         allowed = {"object_name", "method", "margin"}

@@ -6,7 +6,7 @@ import json
 import math
 from typing import Any
 import bpy
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
 _KEY = "harness_movable_structure_v8"
 _CURVE_SNAPSHOT_KEY = "harness_curve_shape_v8"
@@ -14,6 +14,11 @@ _MESH_SOURCE_KEY = "harness_mesh_source_v8"
 _MESH_PART_KEY = "harness_mesh_part_v8"
 _MAX_SAFE_EDGE_STRETCH = 1.5
 _MAX_SAFE_MESH_BEND_DEGREES = 90.0
+_WEIGHT_FALLOFF_RINGS = 4
+_WEIGHT_FALLOFF_FACTOR = 0.55
+_V8_SESSION_KEY = "harness_v8_session"
+_V8_SOURCE_KEY = "harness_v8_source"
+_V8_ROLE_KEY = "harness_v8_role"
 
 def _object(name: str) -> bpy.types.Object:
     obj = bpy.data.objects.get(name)
@@ -192,9 +197,34 @@ def _unique_copy_name(obj: bpy.types.Object, part_name: str) -> str:
     base = f"{obj.name}_V8_{part_name}"
     return base if bpy.data.objects.get(base) is None else f"{base}_{len(bpy.data.objects):03d}"
 
-def _create_mesh_rig(copy: bpy.types.Object, part_name: str, indices: list[int], base_indices: list[int]) -> tuple[str, str]:
+def _smooth_influence_weights(mesh: bpy.types.Mesh, indices: list[int], base_indices: list[int]) -> dict[int, float]:
+    base = Vector(_base_center(mesh, base_indices))
+    distances = {index: (Vector(mesh.vertices[index].co) - base).length for index in indices}
+    maximum = max(distances.values())
+    if maximum <= 1e-6: raise ValueError("selected extension has no length beyond its base")
+    weights = {index: distance / maximum for index, distance in distances.items()}
+    selected_set = set(indices)
+    adjacency: dict[int, set[int]] = {vertex.index: set() for vertex in mesh.vertices}
+    for edge in mesh.edges:
+        first, second = edge.vertices; adjacency[first].add(second); adjacency[second].add(first)
+    frontier = set(indices)
+    for _ in range(_WEIGHT_FALLOFF_RINGS):
+        next_frontier: set[int] = set()
+        for index in frontier:
+            for neighbor in adjacency[index]:
+                if neighbor in selected_set: continue
+                candidate = weights[index] * _WEIGHT_FALLOFF_FACTOR
+                if candidate > weights.get(neighbor, -1.0):
+                    weights[neighbor] = candidate
+                    next_frontier.add(neighbor)
+        frontier = next_frontier
+        if not frontier: break
+    return weights
+
+def _create_mesh_rig(copy: bpy.types.Object, part_name: str, indices: list[int], base_indices: list[int], influence_weights: dict[int, float]) -> tuple[str, str, int]:
     base = Vector(_base_center(copy.data, base_indices))
-    tip = max((Vector(copy.data.vertices[index].co) for index in indices), key=lambda point: (point - base).length)
+    tip_index = max(indices, key=lambda index: (Vector(copy.data.vertices[index].co) - base).length)
+    tip = Vector(copy.data.vertices[tip_index].co)
     direction = tip - base
     if direction.length <= 1e-6: raise ValueError("selected extension has no length beyond its base")
     armature_data = bpy.data.armatures.new(f"{copy.name}_Rig_Data")
@@ -224,16 +254,13 @@ def _create_mesh_rig(copy: bpy.types.Object, part_name: str, indices: list[int],
             bpy.context.view_layer.objects.active = prior_active
     base_group = copy.vertex_groups.new(name="Harness_Base")
     segment_group = copy.vertex_groups.new(name="Harness_Segment")
-    distances = {index: (Vector(copy.data.vertices[index].co) - base).length for index in indices}
-    maximum = max(distances.values())
-    for index, distance in distances.items():
-        weight = distance / maximum
+    for index, weight in influence_weights.items():
         base_group.add([index], 1.0 - weight, "REPLACE")
         segment_group.add([index], weight, "REPLACE")
     modifier = copy.modifiers.new(name="Harness_V8_Armature", type="ARMATURE")
     modifier.object = armature; modifier.use_deform_preserve_volume = True
     armature.show_in_front = True
-    return armature.name, segment_name
+    return armature.name, segment_name, tip_index
 
 def prepare_mesh_extension(params: dict[str, Any]) -> tuple[dict[str, Any], str]:
     source = _object(params["object_name"])
@@ -248,10 +275,11 @@ def prepare_mesh_extension(params: dict[str, Any]) -> tuple[dict[str, Any], str]
     if not source.users_collection: bpy.context.scene.collection.objects.link(copy)
     copy[_MESH_SOURCE_KEY] = source.name
     copy[_MESH_PART_KEY] = json.dumps({"name": params["part_name"], "vertex_indices": indices, "base_vertex_indices": base_indices}, separators=(",", ":"))
-    armature_name, segment_bone = _create_mesh_rig(copy, params["part_name"], indices, base_indices)
-    part = json.loads(copy[_MESH_PART_KEY]); part.update({"armature_name": armature_name, "segment_bone": segment_bone})
+    influence_weights = _smooth_influence_weights(copy.data, indices, base_indices)
+    armature_name, segment_bone, tip_index = _create_mesh_rig(copy, params["part_name"], indices, base_indices, influence_weights)
+    part = json.loads(copy[_MESH_PART_KEY]); part.update({"armature_name": armature_name, "segment_bone": segment_bone, "tip_vertex_index": tip_index, "transition_vertex_count": len(influence_weights) - len(indices)})
     copy[_MESH_PART_KEY] = json.dumps(part, separators=(",", ":"))
-    return {"object": source.name, "copy_object": copy.name, "armature_object": armature_name, "part": params["part_name"], "status": "prepared", "base_protected": True, "source_unchanged": True}, copy.name
+    return {"object": source.name, "copy_object": copy.name, "armature_object": armature_name, "part": params["part_name"], "status": "prepared", "base_protected": True, "source_unchanged": True, "transition_vertex_count": len(influence_weights) - len(indices)}, copy.name
 
 def prepare_selected_mesh_extension(params: dict[str, Any]) -> tuple[dict[str, Any], str]:
     source = _object(params["object_name"])
@@ -301,9 +329,12 @@ def _edge_lengths(mesh: bpy.types.Mesh) -> list[float]:
 
 def _maximum_edge_stretch(before: list[float], after: list[float]) -> float:
     maximum = 1.0
+    positive_lengths = sorted(length for length in before if length > 1e-9)
+    if not positive_lengths: return maximum
+    typical_length = positive_lengths[len(positive_lengths) // 2]
+    minimum_measured_length = max(1e-7, typical_length * 0.01)
     for original, current in zip(before, after):
-        if original <= 1e-9:
-            if current > 1e-9: return float("inf")
+        if original < minimum_measured_length:
             continue
         maximum = max(maximum, current / original, original / max(current, 1e-9))
     return maximum
@@ -313,6 +344,34 @@ def _evaluated_edge_lengths(obj: bpy.types.Object) -> list[float]:
     mesh = evaluated.to_mesh()
     try: return _edge_lengths(mesh)
     finally: evaluated.to_mesh_clear()
+
+def _evaluated_vertex_position(obj: bpy.types.Object, vertex_index: int) -> Vector:
+    evaluated = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    mesh = evaluated.to_mesh()
+    try: return obj.matrix_world @ mesh.vertices[vertex_index].co
+    finally: evaluated.to_mesh_clear()
+
+def _active_view_matrix() -> Any:
+    for window in bpy.context.window_manager.windows:
+        for area in window.screen.areas:
+            if area.type == "VIEW_3D": return area.spaces.active.region_3d.view_matrix.copy()
+    raise ValueError("screen_direction requires a visible Blender 3D viewport")
+
+def _screen_bend_rotation(copy: bpy.types.Object, pose_bone: Any, tip_vertex_index: int, angle_degrees: float, direction: str) -> tuple[list[float], str]:
+    view_matrix = _active_view_matrix(); initial = view_matrix @ _evaluated_vertex_position(copy, tip_vertex_index)
+    desired = {"left": Vector((-1.0, 0.0)), "right": Vector((1.0, 0.0)), "up": Vector((0.0, 1.0)), "down": Vector((0.0, -1.0))}[direction]
+    candidates: list[tuple[float, list[float], str]] = []
+    for axis, index in (("x", 0), ("z", 2)):
+        for sign in (-1.0, 1.0):
+            rotation = [0.0, 0.0, 0.0]; rotation[index] = sign * math.radians(abs(angle_degrees))
+            pose_bone.rotation_mode = "XYZ"; pose_bone.rotation_euler = rotation; bpy.context.view_layer.update()
+            moved = view_matrix @ _evaluated_vertex_position(copy, tip_vertex_index)
+            displacement = Vector((moved.x - initial.x, moved.y - initial.y))
+            score = displacement.normalized().dot(desired) if displacement.length > 1e-6 else -1.0
+            candidates.append((score, rotation, axis))
+    score, rotation, axis = max(candidates, key=lambda candidate: candidate[0])
+    if score <= 0.0: raise ValueError("blocked: the selected part has no safe visible movement in that screen direction")
+    return rotation, axis
 
 def bend_mesh_part(params: dict[str, Any]) -> tuple[dict[str, Any], list[float]]:
     copy = _object(params["object_name"])
@@ -328,16 +387,26 @@ def bend_mesh_part(params: dict[str, Any]) -> tuple[dict[str, Any], list[float]]
     if pose_bone is None: raise ValueError("prepared mesh copy has no segment control")
     previous = [float(value) for value in pose_bone.rotation_euler]
     edge_lengths = _edge_lengths(copy.data)
-    bend_axis = params.get("bend_axis", "x")
-    if bend_axis not in {"x", "z"}: raise ValueError("bend_axis must be x or z")
-    axis_index = {"x": 0, "z": 2}[bend_axis]
-    pose_bone.rotation_mode = "XYZ"; pose_bone.rotation_euler[axis_index] = math.radians(params["angle_degrees"])
+    screen_direction = params.get("screen_direction")
+    if screen_direction is not None:
+        try:
+            rotation, bend_axis = _screen_bend_rotation(copy, pose_bone, part["tip_vertex_index"], params["angle_degrees"], screen_direction)
+            pose_bone.rotation_euler = rotation
+        except Exception:
+            pose_bone.rotation_mode = "XYZ"; pose_bone.rotation_euler = previous
+            bpy.context.view_layer.update()
+            raise
+    else:
+        bend_axis = params.get("bend_axis", "x")
+        if bend_axis not in {"x", "z"}: raise ValueError("bend_axis must be x or z")
+        axis_index = {"x": 0, "z": 2}[bend_axis]
+        pose_bone.rotation_mode = "XYZ"; pose_bone.rotation_euler[axis_index] = math.radians(params["angle_degrees"])
     bpy.context.view_layer.update()
     stretch = _maximum_edge_stretch(edge_lengths, _evaluated_edge_lengths(copy))
     if stretch > _MAX_SAFE_EDGE_STRETCH:
         restore_mesh_part(copy.name, previous)
         raise ValueError(f"blocked: bend would stretch an edge {stretch:.2f}x (limit {_MAX_SAFE_EDGE_STRETCH:.2f}x)")
-    return {"object": copy.name, "source_object": source.name, "part": part["name"], "angle_degrees": params["angle_degrees"], "bend_axis": bend_axis, "base_protected": True, "source_unchanged": True, "maximum_edge_stretch": stretch}, previous
+    return {"object": copy.name, "source_object": source.name, "part": part["name"], "angle_degrees": params["angle_degrees"], "bend_axis": bend_axis, "screen_direction": screen_direction, "base_protected": True, "source_unchanged": True, "maximum_edge_stretch": stretch}, previous
 
 def restore_mesh_part(object_name: str, previous: list[float]) -> None:
     copy = bpy.data.objects.get(object_name)
@@ -370,3 +439,188 @@ def restore_metadata(object_name: str, previous: str | None) -> None:
     if obj is None: return
     if previous is None: obj.pop(_KEY, None)
     else: obj[_KEY] = previous
+
+
+# V8.2 session controls deliberately bind each copied mesh to one visible
+# controller.  Automatic multi-bone deformation is a later V8 milestone; this
+# first session gives the user a safe, inspectable manual rig foundation.
+def _session_collection_name(session_name: str) -> str:
+    return f"Harness_V8_Preview_{session_name}"
+
+
+def _session_payload(collection: bpy.types.Collection) -> dict[str, Any]:
+    raw = collection.get(_V8_SESSION_KEY)
+    try:
+        payload = json.loads(raw) if isinstance(raw, str) else None
+    except json.JSONDecodeError:
+        payload = None
+    if not isinstance(payload, dict):
+        raise ValueError("V8 session metadata is unavailable")
+    return payload
+
+
+def _session_collection(session_name: str) -> bpy.types.Collection:
+    collection = bpy.data.collections.get(_session_collection_name(session_name)) or bpy.data.collections.get(f"Harness_V8_Accepted_{session_name}")
+    if collection is None:
+        raise ValueError("V8 session was not found")
+    _session_payload(collection)
+    return collection
+
+
+def _unique_session_name(requested: str) -> str:
+    base = requested.strip() or "Session"
+    name = base
+    suffix = 1
+    while bpy.data.collections.get(_session_collection_name(name)) is not None:
+        suffix += 1
+        name = f"{base}_{suffix:02d}"
+    return name
+
+
+def _object_axis(obj: bpy.types.Object) -> Vector:
+    dimensions = obj.dimensions
+    axis = max(range(3), key=lambda index: dimensions[index])
+    vector = Vector((0.0, 0.0, 0.0)); vector[axis] = max(float(dimensions[axis]) * 0.35, 0.1)
+    return vector
+
+
+def _create_session_rig(copy: bpy.types.Object, collection: bpy.types.Collection, session_name: str) -> tuple[str, str]:
+    data = bpy.data.armatures.new(f"{copy.name}_V8_Rig_Data")
+    armature = bpy.data.objects.new(f"{copy.name}_V8_Rig", data)
+    collection.objects.link(armature)
+    armature.matrix_world = copy.matrix_world.copy()
+    prior_active = bpy.context.view_layer.objects.active
+    prior_selected = tuple(bpy.context.selected_objects)
+    try:
+        bpy.ops.object.select_all(action="DESELECT")
+        armature.select_set(True); bpy.context.view_layer.objects.active = armature
+        bpy.ops.object.mode_set(mode="EDIT")
+        root = data.edit_bones.new("V8_Root")
+        root.head = (0.0, 0.0, 0.0); root.tail = (0.0, 0.0, 0.25); root.use_deform = False
+        control = data.edit_bones.new("V8_CTRL_Object")
+        control.parent = root; control.head = root.head; control.tail = _object_axis(copy)
+        control.use_deform = True
+    finally:
+        if armature.mode != "OBJECT": bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.ops.object.select_all(action="DESELECT")
+        for item in prior_selected:
+            if item.name in bpy.data.objects: item.select_set(True)
+        if prior_active is not None and prior_active.name in bpy.data.objects:
+            bpy.context.view_layer.objects.active = prior_active
+    armature.show_in_front = True
+    armature.display_type = "WIRE"
+    group = copy.vertex_groups.new(name="V8_CTRL_Object")
+    group.add(list(range(len(copy.data.vertices))), 1.0, "REPLACE")
+    modifier = copy.modifiers.new(name="Harness_V8_Session_Armature", type="ARMATURE")
+    modifier.object = armature
+    modifier.use_deform_preserve_volume = True
+    return armature.name, "V8_CTRL_Object"
+
+
+def create_v8_session(params: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    requested = params.get("session_name", "Session")
+    object_names = params.get("object_names")
+    sources = list(bpy.context.selected_objects) if object_names is None else [bpy.data.objects.get(name) for name in object_names]
+    sources = [item for item in sources if item is not None]
+    if not sources:
+        raise ValueError("select at least one object before creating a V8.2 session")
+    session_name = _unique_session_name(requested)
+    collection = bpy.data.collections.new(_session_collection_name(session_name))
+    bpy.context.scene.collection.children.link(collection)
+    entries: list[dict[str, Any]] = []
+    skipped: list[dict[str, str]] = []
+    try:
+        for source in sources:
+            if source.type != "MESH":
+                skipped.append({"object": source.name, "reason": f"{source.type} is not a deformable mesh in V8.2"})
+                continue
+            copy = source.copy(); copy.data = source.data.copy()
+            copy.name = f"{source.name}_V8_{session_name}"
+            collection.objects.link(copy)
+            copy[_V8_SOURCE_KEY] = source.name; copy[_V8_ROLE_KEY] = "preview_mesh"
+            rig_name, control_name = _create_session_rig(copy, collection, session_name)
+            entries.append({"source_object": source.name, "copy_object": copy.name, "armature_object": rig_name, "control_bone": control_name})
+        if not entries:
+            raise ValueError("V8.2 currently requires at least one selected MESH object")
+        collection[_V8_SESSION_KEY] = json.dumps({"version": "v8.2", "session": session_name, "state": "preview", "entries": entries}, separators=(",", ":"))
+    except Exception:
+        bpy.data.collections.remove(collection)
+        raise
+    return {"session": session_name, "collection": collection.name, "state": "preview", "entries": entries, "skipped": skipped, "source_unchanged": True, "requires_acceptance": True}, session_name
+
+
+def inspect_v8_session(params: dict[str, Any]) -> dict[str, Any]:
+    collection = _session_collection(params["session_name"])
+    payload = _session_payload(collection)
+    return {"collection": collection.name, **payload, "source_unchanged": True}
+
+
+def _pose_snapshot(payload: dict[str, Any]) -> dict[str, list[float]]:
+    snapshot: dict[str, list[float]] = {}
+    for entry in payload["entries"]:
+        armature = bpy.data.objects.get(entry["armature_object"])
+        control = armature.pose.bones.get(entry["control_bone"]) if armature and armature.type == "ARMATURE" else None
+        if control is not None:
+            snapshot[armature.name] = [float(value) for row in control.matrix_basis for value in row]
+    return snapshot
+
+
+def restore_v8_session_pose(session_name: str, snapshot: dict[str, list[float]]) -> None:
+    collection = bpy.data.collections.get(_session_collection_name(session_name))
+    if collection is None: return
+    for armature_name, values in snapshot.items():
+        armature = bpy.data.objects.get(armature_name)
+        if armature is not None and armature.type == "ARMATURE":
+            armature.pose.bones["V8_CTRL_Object"].matrix_basis = Matrix((values[0:4], values[4:8], values[8:12], values[12:16]))
+    bpy.context.view_layer.update()
+
+
+def reset_v8_session(params: dict[str, Any]) -> tuple[dict[str, Any], dict[str, list[float]]]:
+    collection = _session_collection(params["session_name"]); payload = _session_payload(collection)
+    previous = _pose_snapshot(payload)
+    for entry in payload["entries"]:
+        armature = bpy.data.objects.get(entry["armature_object"])
+        if armature is not None and armature.type == "ARMATURE":
+            armature.pose.bones[entry["control_bone"]].matrix_basis.identity()
+    bpy.context.view_layer.update()
+    return {"session": payload["session"], "reset": True, "source_unchanged": True}, previous
+
+
+def pose_v8_control(params: dict[str, Any]) -> tuple[dict[str, Any], dict[str, list[float]]]:
+    collection = _session_collection(params["session_name"]); payload = _session_payload(collection)
+    entry = next((item for item in payload["entries"] if item["copy_object"] == params["copy_object"]), None)
+    if entry is None: raise ValueError("copy_object does not belong to this V8 session")
+    armature = bpy.data.objects.get(entry["armature_object"])
+    if armature is None or armature.type != "ARMATURE": raise ValueError("V8 session control armature is missing")
+    control = armature.pose.bones.get(entry["control_bone"])
+    if control is None: raise ValueError("V8 session control bone is missing")
+    previous = _pose_snapshot(payload)
+    control.rotation_mode = "XYZ"
+    control.location = params["location"]
+    control.rotation_euler = [math.radians(value) for value in params["rotation_degrees"]]
+    bpy.context.view_layer.update()
+    return {"session": payload["session"], "copy_object": entry["copy_object"], "control_bone": entry["control_bone"], "location": params["location"], "rotation_degrees": params["rotation_degrees"], "source_unchanged": True}, previous
+
+
+def accept_v8_session(params: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    collection = _session_collection(params["session_name"]); payload = _session_payload(collection)
+    prior_name = collection.name
+    collection.name = f"Harness_V8_Accepted_{payload['session']}"
+    payload["state"] = "accepted"; collection[_V8_SESSION_KEY] = json.dumps(payload, separators=(",", ":"))
+    return {"session": payload["session"], "collection": collection.name, "accepted": True, "source_unchanged": True}, prior_name
+
+
+def restore_v8_session_acceptance(session_name: str, prior_name: str) -> None:
+    collection = bpy.data.collections.get(f"Harness_V8_Accepted_{session_name}")
+    if collection is None: return
+    collection.name = prior_name
+    payload = _session_payload(collection); payload["state"] = "preview"
+    collection[_V8_SESSION_KEY] = json.dumps(payload, separators=(",", ":"))
+
+
+def discard_v8_session(params: dict[str, Any]) -> dict[str, Any]:
+    collection = _session_collection(params["session_name"]); payload = _session_payload(collection)
+    for item in list(collection.objects):
+        bpy.data.objects.remove(item, do_unlink=True)
+    bpy.data.collections.remove(collection)
+    return {"session": payload["session"], "discarded": True, "source_unchanged": True}

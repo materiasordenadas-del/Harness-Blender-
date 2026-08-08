@@ -201,6 +201,23 @@ def test_mesh_bend_accepts_only_a_local_bend_plane():
     with pytest.raises(bridge_protocol.ProtocolError, match="bend_axis must be x or z"):
         bridge_protocol.parse_operation_request(request("bend_mesh_part", {"object_name": "Copy", "angle_degrees": 25, "bend_axis": "y"}), TOKEN)
 
+def test_mesh_bend_accepts_a_simple_screen_direction():
+    params = bridge_protocol.parse_operation_request(request("bend_mesh_part", {"object_name": "Copy", "angle_degrees": 25, "screen_direction": "left"}), TOKEN)[1]
+    assert params["screen_direction"] == "left"
+    with pytest.raises(bridge_protocol.ProtocolError, match="not both"):
+        bridge_protocol.parse_operation_request(request("bend_mesh_part", {"object_name": "Copy", "angle_degrees": 25, "bend_axis": "x", "screen_direction": "left"}), TOKEN)
+
+def test_v8_session_contract_accepts_selection_or_explicit_mesh_names():
+    operation, params = bridge_protocol.parse_operation_request(request("create_v8_session", {"session_name": "Preview", "object_names": ["A", "B"]}), TOKEN)
+    assert operation == "create_v8_session"
+    assert params == {"session_name": "Preview", "object_names": ["A", "B"]}
+    assert bridge_protocol.parse_operation_request(request("create_v8_session", {}), TOKEN)[1]["object_names"] is None
+    with pytest.raises(bridge_protocol.ProtocolError, match="distinct"):
+        bridge_protocol.parse_operation_request(request("create_v8_session", {"object_names": ["A", "A"]}), TOKEN)
+    assert bridge_protocol.parse_operation_request(request("reset_v8_session", {"session_name": "Preview"}), TOKEN)[1] == {"session_name": "Preview"}
+    pose = bridge_protocol.parse_operation_request(request("pose_v8_control", {"session_name": "Preview", "copy_object": "A", "location": [1, 0, 0]}), TOKEN)[1]
+    assert pose["location"] == [1.0, 0.0, 0.0] and pose["rotation_degrees"] == [0.0, 0.0, 0.0]
+
 
 def test_uv_inspection_is_typed_and_read_only():
     operation, params = bridge_protocol.parse_operation_request(

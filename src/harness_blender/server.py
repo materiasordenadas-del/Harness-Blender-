@@ -334,14 +334,49 @@ def prepare_selected_mesh_extension(object_name: str, part_name: str) -> str:
     return _run("prepare_selected_mesh_extension", {"object_name": object_name, "part_name": part_name})
 
 @mcp.tool()
-def bend_mesh_part(object_name: str, angle_degrees: float, bend_axis: str = "x") -> str:
-    """Bend a temporary V8.2 mesh copy on its local x or z plane while keeping its selected base vertices fixed."""
-    return _run("bend_mesh_part", {"object_name": object_name, "angle_degrees": angle_degrees, "bend_axis": bend_axis})
+def bend_mesh_part(object_name: str, angle_degrees: float, bend_axis: str | None = None, screen_direction: str | None = None) -> str:
+    """Bend a temporary V8.2 mesh copy by a local plane or a simple visible direction: left, right, up or down."""
+    params: dict[str, object] = {"object_name": object_name, "angle_degrees": angle_degrees}
+    if bend_axis is not None: params["bend_axis"] = bend_axis
+    if screen_direction is not None: params["screen_direction"] = screen_direction
+    return _run("bend_mesh_part", params)
 
 @mcp.tool()
 def reset_mesh_part(object_name: str) -> str:
     """Restore the selected extension of a temporary V8.2 mesh copy from its unchanged source mesh."""
     return _run("reset_mesh_part", {"object_name": object_name})
+
+@mcp.tool()
+def create_v8_session(session_name: str = "Session", object_names: list[str] | None = None) -> str:
+    """Create a temporary V8.2 rig preview for selected mesh objects; originals remain unchanged."""
+    params: dict[str, object] = {"session_name": session_name}
+    if object_names is not None: params["object_names"] = object_names
+    return _run("create_v8_session", params)
+
+@mcp.tool()
+def inspect_v8_session(session_name: str) -> str:
+    """Inspect a V8.2 preview session, its copies and visible controls without editing Blender."""
+    return _run("inspect_v8_session", {"session_name": session_name})
+
+@mcp.tool()
+def reset_v8_session(session_name: str) -> str:
+    """Restore every visible V8.2 control in a preview session to its neutral pose."""
+    return _run("reset_v8_session", {"session_name": session_name})
+
+@mcp.tool()
+def pose_v8_control(session_name: str, copy_object: str, location: list[float] | None = None, rotation_degrees: list[float] | None = None) -> str:
+    """Move or rotate one visible V8.2 control bone on a temporary copy; the source remains unchanged."""
+    return _run("pose_v8_control", {"session_name": session_name, "copy_object": copy_object, "location": location or [0, 0, 0], "rotation_degrees": rotation_degrees or [0, 0, 0]})
+
+@mcp.tool()
+def accept_v8_session(session_name: str) -> str:
+    """Keep the V8.2 preview copy as an accepted editable result; the source remains unchanged."""
+    return _run("accept_v8_session", {"session_name": session_name})
+
+@mcp.tool()
+def discard_v8_session(session_name: str) -> str:
+    """Delete a V8.2 preview copy and rig while leaving all original objects unchanged."""
+    return _run("discard_v8_session", {"session_name": session_name})
 
 
 @mcp.tool()

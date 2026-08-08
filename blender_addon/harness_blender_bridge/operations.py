@@ -473,6 +473,26 @@ def _op_reset_mesh_part(params: dict[str, Any]) -> dict[str, Any]:
     _record_undo("reset mesh part", lambda: movable_structure_operations.restore_mesh_part(params["object_name"], previous))
     return result
 
+def _op_create_v8_session(params: dict[str, Any]) -> dict[str, Any]:
+    result, session_name = movable_structure_operations.create_v8_session(params)
+    _record_undo("create V8.2 session", lambda: movable_structure_operations.discard_v8_session({"session_name": session_name}))
+    return result
+
+def _op_reset_v8_session(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous = movable_structure_operations.reset_v8_session(params)
+    _record_undo("reset V8.2 session", lambda: movable_structure_operations.restore_v8_session_pose(params["session_name"], previous))
+    return result
+
+def _op_pose_v8_control(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous = movable_structure_operations.pose_v8_control(params)
+    _record_undo("pose V8.2 control", lambda: movable_structure_operations.restore_v8_session_pose(params["session_name"], previous))
+    return result
+
+def _op_accept_v8_session(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous_name = movable_structure_operations.accept_v8_session(params)
+    _record_undo("accept V8.2 session", lambda: movable_structure_operations.restore_v8_session_acceptance(params["session_name"], previous_name))
+    return result
+
 
 Operation = Callable[[dict[str, Any]], dict[str, Any]]
 OPERATIONS: dict[str, Operation] = {
@@ -491,6 +511,10 @@ OPERATIONS: dict[str, Operation] = {
     "propose_mesh_extension": movable_structure_operations.propose_mesh_extension,
     "prepare_selected_mesh_extension": _op_prepare_selected_mesh_extension,
     "prepare_mesh_extension": _op_prepare_mesh_extension, "bend_mesh_part": _op_bend_mesh_part, "reset_mesh_part": _op_reset_mesh_part,
+    "create_v8_session": _op_create_v8_session, "inspect_v8_session": movable_structure_operations.inspect_v8_session,
+    "reset_v8_session": _op_reset_v8_session, "accept_v8_session": _op_accept_v8_session,
+    "pose_v8_control": _op_pose_v8_control,
+    "discard_v8_session": movable_structure_operations.discard_v8_session,
     "evaluate_spatial": evaluator_operations.evaluate_spatial,
     "evaluate_tubular": evaluator_operations.evaluate_tubular,
     "evaluate_penetration": evaluator_operations.evaluate_penetration,

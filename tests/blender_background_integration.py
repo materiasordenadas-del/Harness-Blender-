@@ -218,6 +218,7 @@ def main() -> None:
     })
     v8_copy = bpy.data.objects[prepared_mesh["copy_object"]]
     assert prepared_mesh["source_unchanged"] is True
+    assert prepared_mesh["transition_vertex_count"] >= 0
     assert [list(vertex.co) for vertex in v8_source.data.vertices] == source_coordinates
     copy_base = evaluated_coordinate(v8_copy, 1)
     copy_tip = evaluated_coordinate(v8_copy, 3)
@@ -241,6 +242,27 @@ def main() -> None:
     assert_close(evaluated_coordinate(v8_copy, 3), copy_tip)
     dispatch_operation("undo", {})  # remove temporary copy
     assert bpy.data.objects.get(prepared_mesh["copy_object"]) is None
+
+    bpy.ops.object.select_all(action="DESELECT")
+    v8_source.select_set(True); bpy.context.view_layer.objects.active = v8_source
+    v8_session = dispatch_operation("create_v8_session", {"session_name": "Background"})
+    assert v8_session["state"] == "preview" and v8_session["source_unchanged"] is True
+    assert len(v8_session["entries"]) == 1
+    session_entry = v8_session["entries"][0]
+    session_copy = bpy.data.objects[session_entry["copy_object"]]
+    session_armature = bpy.data.objects[session_entry["armature_object"]]
+    assert session_copy.data != v8_source.data and session_copy.find_armature() == session_armature
+    source_coordinates = [list(vertex.co) for vertex in v8_source.data.vertices]
+    dispatch_operation("pose_v8_control", {"session_name": "Background", "copy_object": session_copy.name, "location": [0.25, 0, 0], "rotation_degrees": [0, 0, 0]})
+    assert evaluated_coordinate(session_copy, 3) != evaluated_coordinate(v8_source, 3)
+    assert [list(vertex.co) for vertex in v8_source.data.vertices] == source_coordinates
+    assert dispatch_operation("reset_v8_session", {"session_name": "Background"})["reset"] is True
+    assert_close(evaluated_coordinate(session_copy, 3), evaluated_coordinate(v8_source, 3))
+    assert dispatch_operation("accept_v8_session", {"session_name": "Background"})["accepted"] is True
+    assert dispatch_operation("inspect_v8_session", {"session_name": "Background"})["state"] == "accepted"
+    v8_discard = dispatch_operation("create_v8_session", {"session_name": "Discard", "object_names": [v8_source.name]})
+    assert dispatch_operation("discard_v8_session", {"session_name": "Discard"})["discarded"] is True
+    assert bpy.data.objects.get(v8_discard["entries"][0]["copy_object"]) is None
 
     bpy.ops.mesh.primitive_cube_add()
     merge_mesh = bpy.context.object
