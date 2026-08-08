@@ -441,6 +441,7 @@ OPERATIONS: dict[str, Operation] = {
     "validate_mesh": _op_validate_mesh,
     "inspect_mesh_detailed": mesh_operations.inspect_mesh_detailed,
     "inspect_uv": mesh_operations.inspect_uv,
+    "evaluate_uv_layout": mesh_operations.evaluate_uv_layout,
     "unwrap_uv": mesh_operations.unwrap_uv,
     "sculpt_smooth_region": mesh_operations.sculpt_smooth_region,
     "recalculate_normals": mesh_operations.recalculate_normals,

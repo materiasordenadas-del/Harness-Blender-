@@ -183,6 +183,10 @@ def test_uv_inspection_is_typed_and_read_only():
         )
 
 
+def test_uv_layout_evaluation_is_typed_and_read_only():
+    assert bridge_protocol.parse_operation_request(request("evaluate_uv_layout", {"object_name": "Asset"}), TOKEN) == ("evaluate_uv_layout", {"object_name": "Asset"})
+
+
 def test_uv_unwrap_has_bounded_typed_parameters():
     operation, params = bridge_protocol.parse_operation_request(
         request("unwrap_uv", {"object_name": "Asset", "method": "CONFORMAL", "margin": 0.02}), TOKEN

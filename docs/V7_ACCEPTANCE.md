@@ -47,3 +47,12 @@ coordenadas; esas operaciones requieren un contrato reversible posterior.
 `unwrap_uv` usa `ANGLE_BASED` o `CONFORMAL` con un margen limitado. Antes de
 desplegar, guarda todos los mapas UV y sus coordenadas; `undo` restaura ese
 estado completo. No analiza solapes ni decide automáticamente qué método usar.
+
+## Cierre V7
+
+- `evaluate_asset_readiness` valida malla, transformaciones, colecciones,
+  material Principled y presencia de UV.
+- `evaluate_uv_layout` detecta caras UV degeneradas y coordenadas fuera del
+  cuadrado 0–1 sin modificar el asset.
+- `unwrap_uv` y `sculpt_smooth_region` restauran su estado mediante `undo`.
+- La suite unitaria y Blender 5.2 en segundo plano se ejecutaron correctamente.
