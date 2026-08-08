@@ -8,6 +8,7 @@ from typing import Any
 import bmesh
 import bpy
 from mathutils import Vector
+from bpy_extras import view3d_utils
 
 from .operations import _record_undo
 
@@ -302,6 +303,76 @@ def bridge_edge_loops(params: dict[str, Any]) -> dict[str, Any]:
         bm.free()
     _record_undo("bridge edge loops", lambda: _restore_topology(obj.data, snapshot))
     return {"object_name": obj.name, "faces_created": len(result["faces"]), "faces": len(obj.data.polygons)}
+
+
+def split_mesh_by_plane(params: dict[str, Any]) -> dict[str, Any]:
+    """Create two capped meshes and retain the source as a hidden reversible backup."""
+    obj = _mesh_object(params["object_name"])
+    if bpy.data.objects.get(params["positive_name"]) or bpy.data.objects.get(params["negative_name"]):
+        raise ValueError("Split output object name already exists")
+    inverse = obj.matrix_world.inverted()
+    point = inverse @ Vector(params["plane_point"])
+    normal = (inverse.transposed().to_3x3() @ Vector(params["plane_normal"])).normalized()
+    created: list[bpy.types.Object] = []
+    source_hidden, source_render = obj.hide_get(), obj.hide_render
+    try:
+        for name, clear_inner, clear_outer in ((params["positive_name"], True, False), (params["negative_name"], False, True)):
+            bm = bmesh.new()
+            try:
+                bm.from_mesh(obj.data)
+                cut = bmesh.ops.bisect_plane(bm, geom=list(bm.verts) + list(bm.edges) + list(bm.faces), plane_co=point, plane_no=normal, clear_inner=clear_inner, clear_outer=clear_outer)
+                if params["cap"]:
+                    cut_edges = [item for item in cut.get("geom_cut", []) if isinstance(item, bmesh.types.BMEdge) and item.is_valid and item.is_boundary]
+                    if cut_edges:
+                        bmesh.ops.holes_fill(bm, edges=cut_edges, sides=0)
+                if not bm.faces:
+                    raise ValueError("Cut plane does not produce two non-empty mesh parts")
+                mesh = bpy.data.meshes.new(name)
+                bm.to_mesh(mesh)
+                mesh.update()
+            finally:
+                bm.free()
+            part = obj.copy(); part.name = name; part.data = mesh
+            for collection in obj.users_collection or (bpy.context.collection,):
+                collection.objects.link(part)
+            created.append(part)
+        obj.hide_set(True); obj.hide_render = True
+    except Exception:
+        for part in created:
+            bpy.data.objects.remove(part, do_unlink=True)
+        raise
+
+    def restore() -> None:
+        for part in created:
+            current = bpy.data.objects.get(part.name)
+            if current is not None:
+                bpy.data.objects.remove(current, do_unlink=True)
+        obj.hide_set(source_hidden); obj.hide_render = source_render
+        bpy.context.view_layer.update()
+
+    _record_undo("split mesh by plane", restore)
+    return {"source_backup": obj.name, "positive_object": created[0].name, "negative_object": created[1].name, "source_hidden": True, "cap": params["cap"]}
+
+
+def split_selected_mesh_by_view_line(params: dict[str, Any]) -> dict[str, Any]:
+    active = bpy.context.view_layer.objects.active
+    if active is None or active.type != "MESH" or not active.select_get():
+        raise TypeError("Select one active MESH object before using a viewport cut line")
+    for window in bpy.context.window_manager.windows:
+        for area in window.screen.areas:
+            if area.type != "VIEW_3D": continue
+            region = next((item for item in area.regions if item.type == "WINDOW"), None)
+            if region is None: continue
+            space = area.spaces.active
+            def ray(point: list[float]) -> Vector:
+                coord = Vector((point[0] * region.width, point[1] * region.height))
+                return view3d_utils.region_2d_to_vector_3d(region, space.region_3d, coord)
+            first, second = ray(params["line_start"]), ray(params["line_end"])
+            normal = first.cross(second)
+            if normal.length == 0: raise ValueError("Viewport line cannot define a cut plane")
+            origin = view3d_utils.region_2d_to_origin_3d(region, space.region_3d, Vector((region.width / 2, region.height / 2)))
+            return split_mesh_by_plane({"object_name": active.name, "plane_point": list(origin), "plane_normal": list(normal.normalized()), "positive_name": params["positive_name"], "negative_name": params["negative_name"], "cap": params["cap"]})
+    raise RuntimeError("A Blender VIEW_3D window is required for viewport cut lines")
 
 
 def fill_hole(params: dict[str, Any]) -> dict[str, Any]:

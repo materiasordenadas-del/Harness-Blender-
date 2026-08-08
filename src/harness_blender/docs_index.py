@@ -24,6 +24,7 @@ SEED_DOCS = (
     DocEntry("Curve", "https://docs.blender.org/api/current/bpy.types.Curve.html", "bpy.types.Curve", "current", "Curve datablocks store splines and bevel settings for editable curve geometry.", "curve spline bevel radius tilt"),
     DocEntry("BezierSplinePoint", "https://docs.blender.org/api/current/bpy.types.BezierSplinePoint.html", "bpy.types.BezierSplinePoint", "current", "Bezier spline points expose coordinates, handle types and handle positions for editable curve continuity.", "bezier handle left right aligned auto vector curve"),
     DocEntry("GeometryNodeTree", "https://docs.blender.org/api/current/bpy.types.GeometryNodeTree.html", "bpy.types.GeometryNodeTree", "current", "Geometry node trees expose node interfaces, sockets and links for procedural geometry modifiers.", "geometry nodes tree interface socket curve to mesh resample"),
+    DocEntry("Distribute Points on Faces", "https://docs.blender.org/manual/en/latest/modeling/geometry_nodes/geometry/operations/distribute_points_on_faces.html", "GeometryNodeDistributePointsOnFaces", "current", "Distribute Points on Faces creates points across mesh faces using a density input for procedural instancing.", "geometry nodes scatter distribute points faces density instances"),
 )
 
 

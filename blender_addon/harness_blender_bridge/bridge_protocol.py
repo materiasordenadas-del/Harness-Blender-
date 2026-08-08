@@ -39,7 +39,8 @@ ALLOWED_OPERATIONS = {
     "set_modifier_parameter",
     "remove_modifier",
     "apply_modifier",
-    "merge_vertices", "bridge_edge_loops",
+    "merge_vertices", "bridge_edge_loops", "split_mesh_by_plane",
+    "inspect_active_selection", "split_selected_mesh_by_view_line",
     "fill_hole",
     "boolean_union", "boolean_difference", "boolean_intersection",
     "decimate_mesh", "voxel_remesh",
@@ -48,6 +49,8 @@ ALLOWED_OPERATIONS = {
     "capture_screen",
     "capture_controlled_view",
     "create_procedural_tube_setup",
+    "create_surface_scatter_setup",
+    "create_procedural_branching_setup",
     "inspect_geometry_node_tree",
     "create_curve",
     "inspect_curve",
@@ -148,7 +151,7 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
     if not isinstance(params, dict):
         raise ProtocolError("params must be a JSON object")
 
-    if operation in {"ping", "inspect_scene", "inspect_scene_detailed", "undo", "capture_screen"}:
+    if operation in {"ping", "inspect_scene", "inspect_scene_detailed", "inspect_active_selection", "undo", "capture_screen"}:
         return _no_params(params, operation)
 
     if operation == "capture_controlled_view":
@@ -172,6 +175,31 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
             "profile_radius": _number(params.get("profile_radius"), "profile_radius", minimum=0.001, maximum=1000.0),
             "resample_length": _number(params.get("resample_length"), "resample_length", minimum=0.001, maximum=1000.0),
         }
+
+    if operation == "create_surface_scatter_setup":
+        allowed = {"surface_object_name", "instance_object_name", "group_name", "density"}
+        _reject_unknown_keys(params, allowed, where="create_surface_scatter_setup parameter")
+        if set(params) != allowed:
+            raise ProtocolError("create_surface_scatter_setup requires surface, instance, group_name and density")
+        surface = _name(params["surface_object_name"], "surface_object_name")
+        instance = _name(params["instance_object_name"], "instance_object_name")
+        if surface == instance:
+            raise ProtocolError("surface_object_name and instance_object_name must differ")
+        return {"surface_object_name": surface, "instance_object_name": instance, "group_name": _name(params["group_name"], "group_name"), "density": _number(params["density"], "density", minimum=0.0001, maximum=1000.0)}
+
+    if operation == "create_procedural_branching_setup":
+        allowed = {"main_curve_name", "branch_curve_names", "group_name", "profile_radius", "resample_length"}
+        _reject_unknown_keys(params, allowed, where="create_procedural_branching_setup parameter")
+        if set(params) != allowed:
+            raise ProtocolError("create_procedural_branching_setup requires main curve, branches, group and dimensions")
+        branches = params["branch_curve_names"]
+        if not isinstance(branches, list) or not 1 <= len(branches) <= 16:
+            raise ProtocolError("branch_curve_names must contain 1-16 names")
+        main = _name(params["main_curve_name"], "main_curve_name")
+        normalized = [_name(name, "branch_curve_name") for name in branches]
+        if main in normalized or len(set(normalized)) != len(normalized):
+            raise ProtocolError("branch curves must be distinct from the main curve and each other")
+        return {"main_curve_name": main, "branch_curve_names": normalized, "group_name": _name(params["group_name"], "group_name"), "profile_radius": _number(params["profile_radius"], "profile_radius", minimum=0.001, maximum=1000.0), "resample_length": _number(params["resample_length"], "resample_length", minimum=0.001, maximum=1000.0)}
 
     if operation == "inspect_geometry_node_tree":
         _reject_unknown_keys(params, {"object_name"}, where="inspect_geometry_node_tree parameter")
@@ -244,6 +272,43 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         if "object_name" not in params:
             raise ProtocolError("inspect_curve requires object_name")
         return {"object_name": _name(params["object_name"], "object_name")}
+
+    if operation == "split_mesh_by_plane":
+        allowed = {"object_name", "plane_point", "plane_normal", "positive_name", "negative_name", "cap"}
+        _reject_unknown_keys(params, allowed, where="split_mesh_by_plane parameter")
+        required = {"object_name", "plane_point", "plane_normal", "positive_name", "negative_name"}
+        if not required <= set(params):
+            raise ProtocolError("split_mesh_by_plane requires object, plane and both output names")
+        source = _name(params["object_name"], "object_name")
+        positive, negative = _name(params["positive_name"], "positive_name"), _name(params["negative_name"], "negative_name")
+        if len({source, positive, negative}) != 3:
+            raise ProtocolError("split output names must be distinct from each other and the source")
+        normal = _vec3(params["plane_normal"], "plane_normal")
+        if sum(value * value for value in normal) == 0:
+            raise ProtocolError("plane_normal must not be zero")
+        cap = params.get("cap", True)
+        if not isinstance(cap, bool):
+            raise ProtocolError("cap must be a boolean")
+        return {"object_name": source, "plane_point": _vec3(params["plane_point"], "plane_point"), "plane_normal": normal, "positive_name": positive, "negative_name": negative, "cap": cap}
+
+    if operation == "split_selected_mesh_by_view_line":
+        allowed = {"line_start", "line_end", "positive_name", "negative_name", "cap"}
+        _reject_unknown_keys(params, allowed, where="split_selected_mesh_by_view_line parameter")
+        if not {"line_start", "line_end", "positive_name", "negative_name"} <= set(params):
+            raise ProtocolError("split_selected_mesh_by_view_line requires a line and both output names")
+        def point(value: Any, field: str) -> list[float]:
+            if not isinstance(value, list) or len(value) != 2:
+                raise ProtocolError(f"{field} must be two normalized coordinates")
+            return [_number(value[0], field, minimum=0.0, maximum=1.0), _number(value[1], field, minimum=0.0, maximum=1.0)]
+        start, end = point(params["line_start"], "line_start"), point(params["line_end"], "line_end")
+        if start == end:
+            raise ProtocolError("line_start and line_end must differ")
+        positive, negative = _name(params["positive_name"], "positive_name"), _name(params["negative_name"], "negative_name")
+        if positive == negative:
+            raise ProtocolError("split output names must differ")
+        cap = params.get("cap", True)
+        if not isinstance(cap, bool): raise ProtocolError("cap must be a boolean")
+        return {"line_start": start, "line_end": end, "positive_name": positive, "negative_name": negative, "cap": cap}
 
     if operation == "evaluate_spatial":
         _reject_unknown_keys(params, {"object_name", "target_object_name"}, where="evaluate_spatial parameter")

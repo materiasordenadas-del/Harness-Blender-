@@ -75,7 +75,29 @@ Este validador es la frontera de seguridad. Incluso un cliente local que conozca
 - `loose_edges`: cero faces enlazados;
 - `non_manifold_edges`: más de dos faces enlazados.
 
-### 7. Skills
+### 7. Contexto y ciclo de revisión
+
+`config/skill_contracts.json` convierte cada skill en datos revisables: fuente,
+sinónimos de intención, precondiciones, herramientas permitidas, validación,
+fallos comunes y límites. El router usa esas señales para formar un Task Packet
+de máximo tres skills, sin agregar herramientas ajenas.
+
+Antes de ejecutar, `build_scene_task_packet` captura el estado real de Blender.
+Si no hay objetos o tipos compatibles, devuelve bloqueos y permite únicamente
+inspección. Después, `build_review_bundle_from_snapshots` implementa el patrón
+inspirado en AgentCAD: `inspect → execute typed operation → inspect/render →
+validate → diff → decision`.
+
+El bundle registra estado antes/después, operaciones semánticas, diff por objeto,
+regresiones geométricas y revisión visual opcional. Solo puede guardarse una vez
+en `HARNESS_EVIDENCE_DIR`; no ejecuta scripts ni corrige la escena por sí solo.
+
+`config/benchmarks.json` mide cinco tareas repetibles de enrutamiento. Los
+candidatos de herramientas permanecen no ejecutables hasta tener contrato,
+recuperación, pruebas unitarias, Blender background, GUI, MCP E2E y escenario de
+aceptación documentados.
+
+### 8. Skills
 
 Los `.md` explican cómo debe razonar el agente: inspeccionar antes de modificar, utilizar operaciones mínimas y validar después. No sustituyen al software ejecutable.
 
