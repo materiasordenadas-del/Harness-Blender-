@@ -6,12 +6,14 @@ import json
 import math
 from typing import Any
 import bpy
+from mathutils import Vector
 
 _KEY = "harness_movable_structure_v8"
 _CURVE_SNAPSHOT_KEY = "harness_curve_shape_v8"
 _MESH_SOURCE_KEY = "harness_mesh_source_v8"
 _MESH_PART_KEY = "harness_mesh_part_v8"
 _MAX_SAFE_EDGE_STRETCH = 1.5
+_MAX_SAFE_MESH_BEND_DEGREES = 90.0
 
 def _object(name: str) -> bpy.types.Object:
     obj = bpy.data.objects.get(name)
@@ -190,6 +192,49 @@ def _unique_copy_name(obj: bpy.types.Object, part_name: str) -> str:
     base = f"{obj.name}_V8_{part_name}"
     return base if bpy.data.objects.get(base) is None else f"{base}_{len(bpy.data.objects):03d}"
 
+def _create_mesh_rig(copy: bpy.types.Object, part_name: str, indices: list[int], base_indices: list[int]) -> tuple[str, str]:
+    base = Vector(_base_center(copy.data, base_indices))
+    tip = max((Vector(copy.data.vertices[index].co) for index in indices), key=lambda point: (point - base).length)
+    direction = tip - base
+    if direction.length <= 1e-6: raise ValueError("selected extension has no length beyond its base")
+    armature_data = bpy.data.armatures.new(f"{copy.name}_Rig_Data")
+    armature = bpy.data.objects.new(f"{copy.name}_Rig", armature_data)
+    armature.matrix_world = copy.matrix_world.copy()
+    for collection in copy.users_collection: collection.objects.link(armature)
+    if not copy.users_collection: bpy.context.scene.collection.objects.link(armature)
+    prior_active = bpy.context.view_layer.objects.active
+    prior_selected = tuple(bpy.context.selected_objects)
+    try:
+        bpy.ops.object.select_all(action="DESELECT")
+        armature.select_set(True); bpy.context.view_layer.objects.active = armature
+        bpy.ops.object.mode_set(mode="EDIT")
+        root = armature.data.edit_bones.new("Harness_Base")
+        root.head = base - direction.normalized() * max(direction.length * 0.1, 0.001)
+        root.tail = base
+        segment = armature.data.edit_bones.new("Harness_Segment")
+        segment.parent = root; segment.head = base; segment.tail = tip
+        segment_name = segment.name
+        bpy.ops.object.mode_set(mode="OBJECT")
+    finally:
+        if armature.mode != "OBJECT": bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.ops.object.select_all(action="DESELECT")
+        for item in prior_selected:
+            if item.name in bpy.data.objects: item.select_set(True)
+        if prior_active is not None and prior_active.name in bpy.data.objects:
+            bpy.context.view_layer.objects.active = prior_active
+    base_group = copy.vertex_groups.new(name="Harness_Base")
+    segment_group = copy.vertex_groups.new(name="Harness_Segment")
+    distances = {index: (Vector(copy.data.vertices[index].co) - base).length for index in indices}
+    maximum = max(distances.values())
+    for index, distance in distances.items():
+        weight = distance / maximum
+        base_group.add([index], 1.0 - weight, "REPLACE")
+        segment_group.add([index], weight, "REPLACE")
+    modifier = copy.modifiers.new(name="Harness_V8_Armature", type="ARMATURE")
+    modifier.object = armature; modifier.use_deform_preserve_volume = True
+    armature.show_in_front = True
+    return armature.name, segment_name
+
 def prepare_mesh_extension(params: dict[str, Any]) -> tuple[dict[str, Any], str]:
     source = _object(params["object_name"])
     if source.type != "MESH": raise TypeError("prepare_mesh_extension requires a MESH object")
@@ -203,11 +248,10 @@ def prepare_mesh_extension(params: dict[str, Any]) -> tuple[dict[str, Any], str]
     if not source.users_collection: bpy.context.scene.collection.objects.link(copy)
     copy[_MESH_SOURCE_KEY] = source.name
     copy[_MESH_PART_KEY] = json.dumps({"name": params["part_name"], "vertex_indices": indices, "base_vertex_indices": base_indices}, separators=(",", ":"))
-    base_group = copy.vertex_groups.new(name="Harness_Base")
-    base_group.add(base_indices, 1.0, "REPLACE")
-    segment_group = copy.vertex_groups.new(name=f"Harness_{params['part_name']}")
-    segment_group.add(indices, 1.0, "REPLACE")
-    return {"object": source.name, "copy_object": copy.name, "part": params["part_name"], "status": "prepared", "base_protected": True, "source_unchanged": True}, copy.name
+    armature_name, segment_bone = _create_mesh_rig(copy, params["part_name"], indices, base_indices)
+    part = json.loads(copy[_MESH_PART_KEY]); part.update({"armature_name": armature_name, "segment_bone": segment_bone})
+    copy[_MESH_PART_KEY] = json.dumps(part, separators=(",", ":"))
+    return {"object": source.name, "copy_object": copy.name, "armature_object": armature_name, "part": params["part_name"], "status": "prepared", "base_protected": True, "source_unchanged": True}, copy.name
 
 def prepare_selected_mesh_extension(params: dict[str, Any]) -> tuple[dict[str, Any], str]:
     source = _object(params["object_name"])
@@ -241,7 +285,13 @@ def propose_mesh_extension(params: dict[str, Any]) -> dict[str, Any]:
 
 def remove_mesh_copy(copy_name: str) -> None:
     copy = bpy.data.objects.get(copy_name)
-    if copy is not None: bpy.data.objects.remove(copy, do_unlink=True)
+    armature_name = None
+    if copy is not None:
+        try: armature_name = _mesh_part(copy).get("armature_name")
+        except ValueError: pass
+        bpy.data.objects.remove(copy, do_unlink=True)
+    armature = bpy.data.objects.get(armature_name) if isinstance(armature_name, str) else None
+    if armature is not None: bpy.data.objects.remove(armature, do_unlink=True)
 
 def _base_center(mesh: bpy.types.Mesh, indices: list[int]) -> list[float]:
     return [sum(mesh.vertices[index].co[axis] for index in indices) / len(indices) for axis in range(3)]
@@ -249,59 +299,67 @@ def _base_center(mesh: bpy.types.Mesh, indices: list[int]) -> list[float]:
 def _edge_lengths(mesh: bpy.types.Mesh) -> list[float]:
     return [math.dist(mesh.vertices[edge.vertices[0]].co, mesh.vertices[edge.vertices[1]].co) for edge in mesh.edges]
 
-def _maximum_edge_stretch(mesh: bpy.types.Mesh, before: list[float]) -> float:
+def _maximum_edge_stretch(before: list[float], after: list[float]) -> float:
     maximum = 1.0
-    for edge, original in zip(mesh.edges, before):
-        current = math.dist(mesh.vertices[edge.vertices[0]].co, mesh.vertices[edge.vertices[1]].co)
+    for original, current in zip(before, after):
         if original <= 1e-9:
             if current > 1e-9: return float("inf")
             continue
         maximum = max(maximum, current / original, original / max(current, 1e-9))
     return maximum
 
-def bend_mesh_part(params: dict[str, Any]) -> tuple[dict[str, Any], list[list[float]]]:
+def _evaluated_edge_lengths(obj: bpy.types.Object) -> list[float]:
+    evaluated = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    mesh = evaluated.to_mesh()
+    try: return _edge_lengths(mesh)
+    finally: evaluated.to_mesh_clear()
+
+def bend_mesh_part(params: dict[str, Any]) -> tuple[dict[str, Any], float]:
     copy = _object(params["object_name"])
     if copy.type != "MESH": raise TypeError("bend_mesh_part requires a prepared MESH copy")
-    part = _mesh_part(copy); indices = part["vertex_indices"]; base_indices = part["base_vertex_indices"]
+    if abs(params["angle_degrees"]) > _MAX_SAFE_MESH_BEND_DEGREES:
+        raise ValueError(f"blocked: mesh bends are limited to +/-{_MAX_SAFE_MESH_BEND_DEGREES:.0f} degrees")
+    part = _mesh_part(copy)
     source_name = copy.get(_MESH_SOURCE_KEY); source = bpy.data.objects.get(source_name) if isinstance(source_name, str) else None
     if source is None or source.type != "MESH": raise ValueError("the original mesh is no longer available for this temporary copy")
-    previous = [[float(copy.data.vertices[index].co[axis]) for axis in range(3)] for index in indices]
+    armature = bpy.data.objects.get(part.get("armature_name"))
+    if armature is None or armature.type != "ARMATURE": raise ValueError("prepared mesh copy has no internal armature")
+    pose_bone = armature.pose.bones.get(part.get("segment_bone"))
+    if pose_bone is None: raise ValueError("prepared mesh copy has no segment control")
+    previous = float(pose_bone.rotation_euler.y)
     edge_lengths = _edge_lengths(copy.data)
-    base = _base_center(copy.data, base_indices)
-    distances = [math.dist(copy.data.vertices[index].co, base) for index in indices]
-    maximum = max(distances)
-    if maximum == 0.0: raise ValueError("selected extension has no length beyond its base")
-    radians = math.radians(params["angle_degrees"])
-    base_set = set(base_indices)
-    for index, distance in zip(indices, distances):
-        if index in base_set: continue
-        point = copy.data.vertices[index]; factor = distance / maximum; angle = radians * factor
-        x, z = point.co.x - base[0], point.co.z - base[2]
-        point.co.x = base[0] + x * math.cos(angle) + z * math.sin(angle)
-        point.co.z = base[2] - x * math.sin(angle) + z * math.cos(angle)
-    copy.data.update()
-    stretch = _maximum_edge_stretch(copy.data, edge_lengths)
+    pose_bone.rotation_mode = "XYZ"; pose_bone.rotation_euler.y = math.radians(params["angle_degrees"])
+    bpy.context.view_layer.update()
+    stretch = _maximum_edge_stretch(edge_lengths, _evaluated_edge_lengths(copy))
     if stretch > _MAX_SAFE_EDGE_STRETCH:
         restore_mesh_part(copy.name, previous)
         raise ValueError(f"blocked: bend would stretch an edge {stretch:.2f}x (limit {_MAX_SAFE_EDGE_STRETCH:.2f}x)")
     return {"object": copy.name, "source_object": source.name, "part": part["name"], "angle_degrees": params["angle_degrees"], "base_protected": True, "source_unchanged": True, "maximum_edge_stretch": stretch}, previous
 
-def restore_mesh_part(object_name: str, previous: list[list[float]]) -> None:
+def restore_mesh_part(object_name: str, previous: float) -> None:
     copy = bpy.data.objects.get(object_name)
     if copy is None or copy.type != "MESH": return
     part = _mesh_part(copy)
-    for index, coordinate in zip(part["vertex_indices"], previous): copy.data.vertices[index].co = coordinate
-    copy.data.update()
+    armature = bpy.data.objects.get(part.get("armature_name"))
+    if armature is None: return
+    pose_bone = armature.pose.bones.get(part.get("segment_bone"))
+    if pose_bone is None: return
+    pose_bone.rotation_mode = "XYZ"; pose_bone.rotation_euler.y = previous
+    bpy.context.view_layer.update()
 
-def reset_mesh_part(params: dict[str, Any]) -> tuple[dict[str, Any], list[list[float]]]:
+def reset_mesh_part(params: dict[str, Any]) -> tuple[dict[str, Any], float]:
     copy = _object(params["object_name"])
     if copy.type != "MESH": raise TypeError("reset_mesh_part requires a prepared MESH copy")
     part = _mesh_part(copy); source_name = copy.get(_MESH_SOURCE_KEY)
     source = bpy.data.objects.get(source_name) if isinstance(source_name, str) else None
     if source is None or source.type != "MESH": raise ValueError("the original mesh is no longer available for this temporary copy")
-    previous = [[float(copy.data.vertices[index].co[axis]) for axis in range(3)] for index in part["vertex_indices"]]
-    for index in part["vertex_indices"]: copy.data.vertices[index].co = source.data.vertices[index].co
-    copy.data.update()
+    armature = bpy.data.objects.get(part.get("armature_name"))
+    if armature is None: raise ValueError("prepared mesh copy has no internal armature")
+    pose_bone = armature.pose.bones.get(part.get("segment_bone"))
+    if pose_bone is None: raise ValueError("prepared mesh copy has no segment control")
+    previous = float(pose_bone.rotation_euler.y)
+    pose_bone.rotation_mode = "XYZ"; pose_bone.rotation_euler.y = 0.0
+    bpy.context.view_layer.update()
     return {"object": copy.name, "source_object": source.name, "part": part["name"], "reset": True, "base_protected": True, "source_unchanged": True}, previous
 
 def restore_metadata(object_name: str, previous: str | None) -> None:

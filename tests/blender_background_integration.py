@@ -29,6 +29,15 @@ def assert_close(actual, expected, tolerance=1e-6):
             raise AssertionError((actual, expected))
 
 
+def evaluated_coordinate(obj, vertex_index):
+    evaluated = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    mesh = evaluated.to_mesh()
+    try:
+        return list(mesh.vertices[vertex_index].co)
+    finally:
+        evaluated.to_mesh_clear()
+
+
 def main() -> None:
     bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.context.preferences.edit.use_global_undo = True
@@ -210,25 +219,25 @@ def main() -> None:
     v8_copy = bpy.data.objects[prepared_mesh["copy_object"]]
     assert prepared_mesh["source_unchanged"] is True
     assert [list(vertex.co) for vertex in v8_source.data.vertices] == source_coordinates
-    copy_base = list(v8_copy.data.vertices[1].co)
-    copy_tip = list(v8_copy.data.vertices[3].co)
+    copy_base = evaluated_coordinate(v8_copy, 1)
+    copy_tip = evaluated_coordinate(v8_copy, 3)
     bent_mesh = dispatch_operation("bend_mesh_part", {"object_name": v8_copy.name, "angle_degrees": 45})
     assert bent_mesh["base_protected"] is True and bent_mesh["source_unchanged"] is True
     assert bent_mesh["maximum_edge_stretch"] <= 1.5
-    assert_close(list(v8_copy.data.vertices[1].co), copy_base)
-    assert list(v8_copy.data.vertices[3].co) != copy_tip
+    assert_close(evaluated_coordinate(v8_copy, 1), copy_base)
+    assert evaluated_coordinate(v8_copy, 3) != copy_tip
     assert [list(vertex.co) for vertex in v8_source.data.vertices] == source_coordinates
     assert dispatch_operation("reset_mesh_part", {"object_name": v8_copy.name})["reset"] is True
-    assert_close(list(v8_copy.data.vertices[3].co), copy_tip)
+    assert_close(evaluated_coordinate(v8_copy, 3), copy_tip)
     try:
         dispatch_operation("bend_mesh_part", {"object_name": v8_copy.name, "angle_degrees": 180})
         raise AssertionError("unsafe mesh bend was not blocked")
     except ValueError as exc:
-        assert "would stretch an edge" in str(exc)
-    assert_close(list(v8_copy.data.vertices[3].co), copy_tip)
+        assert "mesh bends are limited" in str(exc)
+    assert_close(evaluated_coordinate(v8_copy, 3), copy_tip)
     dispatch_operation("undo", {})  # undo reset
     dispatch_operation("undo", {})  # undo bend
-    assert_close(list(v8_copy.data.vertices[3].co), copy_tip)
+    assert_close(evaluated_coordinate(v8_copy, 3), copy_tip)
     dispatch_operation("undo", {})  # remove temporary copy
     assert bpy.data.objects.get(prepared_mesh["copy_object"]) is None
 
