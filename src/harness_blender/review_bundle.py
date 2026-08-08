@@ -10,6 +10,7 @@ from typing import Any
 
 from .evaluator import diff_reports
 from .visual_review import validate_visual_review
+from .visual_evidence import validate_visual_comparison
 
 _OPERATION = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _EVIDENCE_ID = re.compile(r"^[a-zA-Z0-9_-]{1,80}$")
@@ -30,7 +31,8 @@ def _reports(snapshot: Any) -> dict[str, dict[str, Any]]:
 
 
 def build_review_bundle(
-    before: Any, after: Any, operations: Any, visual_review: Any | None = None, *, visual_required: bool = False
+    before: Any, after: Any, operations: Any, visual_review: Any | None = None, visual_comparison: Any | None = None,
+    *, visual_required: bool = False
 ) -> dict[str, Any]:
     if not isinstance(operations, list) or len(operations) > 64 or not all(isinstance(item, str) and _OPERATION.fullmatch(item) for item in operations):
         raise ValueError("operations must contain at most 64 semantic operation names")
@@ -43,20 +45,23 @@ def build_review_bundle(
             if field in report and int(report[field]) > int(previous.get(field, 0)):
                 regressions.append({"object": name, "field": field, "before": previous.get(field, 0), "after": report[field]})
     normalized_visual = validate_visual_review(visual_review) if visual_review is not None else None
+    normalized_comparison = validate_visual_comparison(visual_comparison) if visual_comparison is not None else None
+    if normalized_comparison is not None:
+        normalized_visual = normalized_comparison["review"]
     if regressions:
         status, next_step = "FAIL", "undo or correct the deterministic regression"
     elif normalized_visual and normalized_visual["status"] == "needs_correction":
         status, next_step = "NEEDS_IMPROVEMENT", "apply one bounded correction and capture a new snapshot"
     elif normalized_visual and normalized_visual["status"] == "needs_review":
         status, next_step = "NEEDS_REVIEW", "capture more controlled views or request human review"
-    elif visual_required and normalized_visual is None:
+    elif visual_required and normalized_comparison is None:
         status, next_step = "NEEDS_REVIEW", "visual evidence is required before completion"
     else:
         status, next_step = "PASS", "preserve the evidence bundle"
     return {
         "created_at": datetime.now(UTC).isoformat(), "operations": operations,
         "before": before, "after": after, "object_diffs": object_diffs,
-        "regressions": regressions, "visual_review": normalized_visual,
+        "regressions": regressions, "visual_review": normalized_visual, "visual_comparison": normalized_comparison,
         "status": status, "next_step": next_step,
     }
 

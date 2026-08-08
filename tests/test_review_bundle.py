@@ -34,6 +34,17 @@ def test_review_bundle_uses_visual_gate_when_required():
     assert bundle["status"] == "NEEDS_REVIEW"
 
 
+def test_review_bundle_records_reference_comparison_and_uses_its_review():
+    comparison = {
+        "reference_id": "ref-01", "target_object": "Tube", "views": ["front", "right", "perspective"],
+        "regions": [{"reference_region": "junction", "result_region": "junction", "assessment": "too sharp"}],
+        "review": {"status": "needs_correction", "confidence": 0.8, "issues": [{"region": "junction", "problem": "too sharp", "severity": 0.7}]},
+    }
+    bundle = build_review_bundle(_snapshot({}), _snapshot({}), ["smooth_mesh"], visual_comparison=comparison, visual_required=True)
+    assert bundle["status"] == "NEEDS_IMPROVEMENT"
+    assert bundle["visual_comparison"]["reference_id"] == "ref-01"
+
+
 def test_review_bundle_is_saved_once_as_immutable_evidence(tmp_path):
     bundle = build_review_bundle(_snapshot({}), _snapshot({}), ["inspect_scene_detailed"])
     saved = save_review_bundle(bundle, "review-01", tmp_path)

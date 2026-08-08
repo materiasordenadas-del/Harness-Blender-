@@ -20,6 +20,19 @@ valores no válidos. Con `pass` o `needs_review` se detiene; con
 `needs_correction` solo autoriza otra corrección hasta tres veces por defecto,
 nunca más de cinco. Esta autorización no ejecuta cambios por sí sola.
 
+## Comparación con referencia
+
+`build_visual_review_capture_plan` exige tres llamadas individuales a
+`capture_controlled_view`, en este orden fijo: `front`, `right`, `perspective`.
+Un modelo de visión externo compara esas imágenes con la referencia entregada
+por el usuario y devuelve un paquete validado por
+`validate_visual_comparison_report`.
+
+El paquete guarda un identificador de referencia, el objeto, las tres vistas,
+regiones emparejadas entre referencia y resultado, y el informe visual. Harness
+no interpreta los píxeles, no inventa la referencia y no corrige Blender por su
+cuenta. El paquete se adjunta al Review Bundle junto con el diff V4.
+
 ## Pruebas realizadas
 
 - Pruebas de protocolo: vistas no permitidas y parámetros extra se rechazan.

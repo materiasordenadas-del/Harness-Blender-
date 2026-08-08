@@ -22,6 +22,7 @@ from .tool_catalog import list_candidates
 from .review_bundle import build_review_bundle, save_review_bundle
 from .benchmarks import run_benchmarks
 from .visual_review import next_visual_review_step as decide_next_visual_review_step, validate_visual_review
+from .visual_evidence import validate_visual_comparison
 
 mcp = FastMCP("Harness Blender V1")
 _connection = BlenderConnection()
@@ -96,10 +97,11 @@ def build_scene_task_packet(task: str, object_names: list[str] | None = None) ->
 @mcp.tool()
 def build_review_bundle_from_snapshots(
     before: dict[str, Any], after: dict[str, Any], operations: list[str], visual_review: dict[str, Any] | None = None,
+    visual_comparison: dict[str, Any] | None = None,
     visual_required: bool = False,
 ) -> str:
     """Compare real snapshots and return PASS, NEEDS_IMPROVEMENT, FAIL or NEEDS_REVIEW."""
-    return json.dumps(build_review_bundle(before, after, operations, visual_review, visual_required=visual_required), ensure_ascii=False, indent=2)
+    return json.dumps(build_review_bundle(before, after, operations, visual_review, visual_comparison, visual_required=visual_required), ensure_ascii=False, indent=2)
 
 
 @mcp.tool()
@@ -139,6 +141,24 @@ def diff_evaluation_reports(before: dict[str, Any], after: dict[str, Any]) -> st
 def validate_visual_review_report(review: dict[str, Any]) -> str:
     """Validate a structured observation made from controlled views; it never edits Blender."""
     return json.dumps(validate_visual_review(review), ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def build_visual_review_capture_plan(focus_object: str) -> str:
+    """Return the three required single-image captures in their fixed comparison order."""
+    if not isinstance(focus_object, str) or not focus_object.strip() or len(focus_object) > 255:
+        raise ValueError("focus_object must contain 1-255 characters")
+    return json.dumps({
+        "focus_object": focus_object.strip(),
+        "views": ["front", "right", "perspective"],
+        "instruction": "Call capture_controlled_view once for each view, in this order, before visual comparison.",
+    }, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def validate_visual_comparison_report(comparison: dict[str, Any]) -> str:
+    """Validate reference/result comparison metadata without judging or editing images."""
+    return json.dumps(validate_visual_comparison(comparison), ensure_ascii=False, indent=2)
 
 
 @mcp.tool()

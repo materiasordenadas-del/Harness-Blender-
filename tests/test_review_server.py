@@ -33,3 +33,9 @@ def test_snapshot_keeps_scene_evidence_when_curve_metrics_are_unavailable(monkey
     monkeypatch.setattr(server._connection, "call", fake_call)
     snapshot = json.loads(server.capture_scene_snapshot())
     assert "metrics_error" in snapshot["objects"][0]
+
+
+def test_visual_review_capture_plan_requires_three_fixed_views():
+    plan = json.loads(server.build_visual_review_capture_plan("Tube"))
+    assert plan["focus_object"] == "Tube"
+    assert plan["views"] == ["front", "right", "perspective"]
