@@ -20,6 +20,7 @@ from .scene_packet import enrich_task_packet
 from .task_packet import build_task_packet
 from .tool_catalog import list_candidates
 from .review_bundle import build_review_bundle, save_review_bundle
+from .benchmarks import run_benchmarks
 from .visual_review import next_visual_review_step as decide_next_visual_review_step, validate_visual_review
 
 mcp = FastMCP("Harness Blender V1")
@@ -120,6 +121,12 @@ def list_tool_candidates(status: str | None = None) -> str:
     if status is not None:
         candidates = [item for item in candidates if item["status"] == status]
     return json.dumps(candidates, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def run_harness_benchmarks() -> str:
+    """Run deterministic routing benchmarks; this never connects to Blender."""
+    return json.dumps(run_benchmarks(), ensure_ascii=False, indent=2)
 
 
 @mcp.tool()
