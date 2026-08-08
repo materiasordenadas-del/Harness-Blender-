@@ -171,6 +171,10 @@ def test_asset_readiness_is_typed_and_rejects_extra_fields():
         )
 
 
+def test_rigging_structure_inspection_is_typed_and_read_only():
+    assert bridge_protocol.parse_operation_request(request("inspect_rigging_structure", {"object_name": "Mesh"}), TOKEN) == ("inspect_rigging_structure", {"object_name": "Mesh"})
+
+
 def test_uv_inspection_is_typed_and_read_only():
     operation, params = bridge_protocol.parse_operation_request(
         request("inspect_uv", {"object_name": "Asset"}), TOKEN

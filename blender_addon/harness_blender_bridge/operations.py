@@ -431,6 +431,7 @@ OPERATIONS: dict[str, Operation] = {
     "inspect_active_selection": _op_inspect_active_selection,
     "evaluate_mesh": evaluator_operations.evaluate_mesh,
     "evaluate_asset_readiness": evaluator_operations.evaluate_asset_readiness,
+    "inspect_rigging_structure": evaluator_operations.inspect_rigging_structure,
     "evaluate_spatial": evaluator_operations.evaluate_spatial,
     "evaluate_tubular": evaluator_operations.evaluate_tubular,
     "evaluate_penetration": evaluator_operations.evaluate_penetration,

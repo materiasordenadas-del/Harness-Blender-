@@ -31,3 +31,9 @@ def test_discovers_v7_uv_inspection_as_read_only_skill():
     skill = find("uv-inspection")
     assert skill.domain == "production"
     assert skill.tools == ("inspect_mesh_detailed", "inspect_uv", "unwrap_uv")
+
+
+def test_discovers_v8_rig_foundation_skill():
+    skill = find("rig-foundation")
+    assert skill.domain == "animation"
+    assert "inspect_rigging_structure" in skill.tools

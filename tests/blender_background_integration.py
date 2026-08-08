@@ -203,6 +203,10 @@ def main() -> None:
     assert asset_readiness["status"] == "needs_review"
     assert asset_readiness["blockers"] == []
     assert "materials" in asset_readiness["needs_review"]
+    rigging_structure = dispatch_operation("inspect_rigging_structure", {"object_name": evaluated_mesh.name})
+    assert rigging_structure["object_type"] == "MESH"
+    assert rigging_structure["connected_components"] == 1
+    assert rigging_structure["bone_count"] == 0
     uv_report = dispatch_operation("inspect_uv", {"object_name": evaluated_mesh.name})
     assert uv_report["has_uv"] is True
     assert uv_report["active_layer"] is not None

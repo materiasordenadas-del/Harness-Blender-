@@ -269,6 +269,12 @@ def evaluate_asset_readiness(object_name: str) -> str:
 
 
 @mcp.tool()
+def inspect_rigging_structure(object_name: str) -> str:
+    """Inspect rig-related mesh or armature structure without editing Blender."""
+    return _run("inspect_rigging_structure", {"object_name": object_name})
+
+
+@mcp.tool()
 def evaluate_spatial(object_name: str, target_object_name: str) -> str:
     """Measure world bounding-box overlap and nearest-box distance without editing Blender."""
     return _run("evaluate_spatial", {"object_name": object_name, "target_object_name": target_object_name})

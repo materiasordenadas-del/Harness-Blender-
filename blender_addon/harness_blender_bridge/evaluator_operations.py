@@ -117,6 +117,44 @@ def evaluate_asset_readiness(params: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def inspect_rigging_structure(params: dict[str, Any]) -> dict[str, Any]:
+    """Read only the rig-related structure of one mesh or armature."""
+    obj = bpy.data.objects.get(params["object_name"])
+    if obj is None or obj.type not in {"MESH", "ARMATURE"}:
+        raise TypeError("inspect_rigging_structure requires an existing MESH or ARMATURE object")
+    armature_modifiers = []
+    components = None
+    if obj.type == "MESH":
+        armature_modifiers = [modifier.object.name if modifier.object else None for modifier in obj.modifiers if modifier.type == "ARMATURE"]
+        bm = bmesh.new()
+        try:
+            bm.from_mesh(obj.data)
+            pending = set(bm.verts)
+            components = 0
+            while pending:
+                components += 1
+                stack = [pending.pop()]
+                while stack:
+                    vertex = stack.pop()
+                    for edge in vertex.link_edges:
+                        neighbour = edge.other_vert(vertex)
+                        if neighbour in pending:
+                            pending.remove(neighbour)
+                            stack.append(neighbour)
+        finally:
+            bm.free()
+    armature = obj if obj.type == "ARMATURE" else obj.find_armature()
+    return {
+        "object_name": obj.name,
+        "object_type": obj.type,
+        "vertex_groups": [group.name for group in obj.vertex_groups] if obj.type == "MESH" else [],
+        "armature_parent": armature.name if armature else None,
+        "armature_modifiers": armature_modifiers,
+        "bone_count": len(armature.data.bones) if armature else 0,
+        "connected_components": components,
+    }
+
+
 def _world_bounds(obj: bpy.types.Object) -> tuple[Vector, Vector]:
     corners = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
     return (
