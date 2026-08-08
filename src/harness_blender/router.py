@@ -17,6 +17,12 @@ class Route:
 
 _RULES = (
     (
+        ("geometry nodes", "geometry node", "nodos", "procedural", "procedimental", "tubo procedural"),
+        ("procedural-tubes",),
+        ("create_procedural_tube_setup", "inspect_geometry_node_tree", "evaluate_tubular", "evaluate_mesh"),
+        ("https://docs.blender.org/manual/en/latest/modeling/geometry_nodes/geometry/index.html",),
+    ),
+    (
         ("visual", "vista", "imagen", "captura", "referencia", "parece", "apariencia", "deformaci"),
         ("visual-review",),
         ("inspect_scene_detailed", "evaluate_mesh", "evaluate_tubular", "capture_controlled_view"),
