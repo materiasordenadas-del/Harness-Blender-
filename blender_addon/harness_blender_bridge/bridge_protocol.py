@@ -34,6 +34,8 @@ ALLOWED_OPERATIONS = {
     "evaluate_uv_layout",
     "unwrap_uv",
     "sculpt_smooth_region",
+    "solidify_mesh",
+    "make_mesh_solid",
     "evaluate_mesh",
     "recalculate_normals",
     "flip_normals",
@@ -301,6 +303,27 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         if not isinstance(indices, list) or not 1 <= len(indices) <= 256 or any(not isinstance(item, int) or item < 0 for item in indices) or len(indices) != len(set(indices)):
             raise ProtocolError("vertex_indices must contain 1-256 distinct non-negative integers")
         return {"object_name": _name(params["object_name"], "object_name"), "vertex_indices": indices, "factor": _number(params.get("factor", 0.5), "factor", minimum=0.0, maximum=1.0), "iterations": _integer(params.get("iterations", 1), "iterations", minimum=1, maximum=10)}
+
+    if operation == "solidify_mesh":
+        allowed = {"object_name", "thickness", "offset", "fill_rim", "modifier_name"}
+        _reject_unknown_keys(params, allowed, where="solidify_mesh parameter")
+        if "object_name" not in params or "thickness" not in params:
+            raise ProtocolError("solidify_mesh requires object_name and thickness")
+        fill_rim = params.get("fill_rim", True)
+        if not isinstance(fill_rim, bool):
+            raise ProtocolError("fill_rim must be a boolean")
+        return {"object_name": _name(params["object_name"], "object_name"), "thickness": _number(params["thickness"], "thickness", minimum=0.0001, maximum=1000.0), "offset": _number(params.get("offset", -1.0), "offset", minimum=-1.0, maximum=1.0), "fill_rim": fill_rim, "modifier_name": _name(params.get("modifier_name", "Harness Solidify"), "modifier_name")}
+
+    if operation == "make_mesh_solid":
+        allowed = {"object_name", "output_name", "thickness", "voxel_size"}
+        _reject_unknown_keys(params, allowed, where="make_mesh_solid parameter")
+        if set(params) != allowed:
+            raise ProtocolError("make_mesh_solid requires object_name, output_name, thickness and voxel_size")
+        source = _name(params["object_name"], "object_name")
+        output = _name(params["output_name"], "output_name")
+        if source == output:
+            raise ProtocolError("output_name must differ from object_name")
+        return {"object_name": source, "output_name": output, "thickness": _number(params["thickness"], "thickness", minimum=0.0001, maximum=1000.0), "voxel_size": _number(params["voxel_size"], "voxel_size", minimum=0.001, maximum=1000.0)}
 
     if operation == "split_mesh_by_plane":
         allowed = {"object_name", "plane_point", "plane_normal", "positive_name", "negative_name", "cap"}

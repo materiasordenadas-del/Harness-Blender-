@@ -455,6 +455,8 @@ OPERATIONS: dict[str, Operation] = {
     "set_metallic": lambda params: mesh_operations.set_material_scalar(params, "Metallic", "metallic"),
     "set_alpha": lambda params: mesh_operations.set_material_scalar(params, "Alpha", "alpha"),
     "add_modifier": mesh_operations.add_modifier,
+    "solidify_mesh": mesh_operations.solidify_mesh,
+    "make_mesh_solid": mesh_operations.make_mesh_solid,
     "set_modifier_parameter": mesh_operations.set_modifier_parameter,
     "remove_modifier": mesh_operations.remove_modifier,
     "apply_modifier": mesh_operations.apply_modifier,

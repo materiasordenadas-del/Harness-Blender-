@@ -230,6 +230,21 @@ def main() -> None:
     dispatch_operation("undo", {})
     assert [tuple(vertex.co) for vertex in evaluated_mesh.data.vertices] == before_sculpt
 
+    bpy.ops.mesh.primitive_plane_add(size=2, location=(8, 0, 0))
+    solidify_surface = bpy.context.object
+    solidify_surface.name = "V7_Solidify_Surface"
+    solidified = dispatch_operation("solidify_mesh", {"object_name": solidify_surface.name, "thickness": 0.2, "fill_rim": True})
+    assert solidified["applied"] is False
+    assert solidify_surface.modifiers[solidified["modifier_name"]].use_rim is True
+    dispatch_operation("undo", {})
+    assert not solidify_surface.modifiers
+    solid_copy = dispatch_operation("make_mesh_solid", {"object_name": solidify_surface.name, "output_name": "V7_Solidified_Copy", "thickness": 0.2, "voxel_size": 0.1})
+    assert solid_copy["source_object"] == solidify_surface.name
+    assert solid_copy["is_closed_manifold"] is True
+    assert bpy.data.objects.get("V7_Solidified_Copy") is not None
+    dispatch_operation("undo", {})
+    assert bpy.data.objects.get("V7_Solidified_Copy") is None
+
     bpy.ops.mesh.primitive_cube_add(size=2, location=(4, 0, 0))
     target_mesh = bpy.context.object
     target_mesh.name = "V4_Penetration_Target"

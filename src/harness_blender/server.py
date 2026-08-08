@@ -353,6 +353,18 @@ def add_modifier(object_name: str, name: str, modifier_type: str) -> str:
 
 
 @mcp.tool()
+def solidify_mesh(object_name: str, thickness: float, offset: float = -1.0, fill_rim: bool = True, modifier_name: str = "Harness Solidify") -> str:
+    """Give a mesh reversible wall thickness; fill_rim closes its open border."""
+    return _run("solidify_mesh", {"object_name": object_name, "thickness": thickness, "offset": offset, "fill_rim": fill_rim, "modifier_name": modifier_name})
+
+
+@mcp.tool()
+def make_mesh_solid(object_name: str, output_name: str, thickness: float, voxel_size: float) -> str:
+    """Create a separate closed solid copy from a surface mesh; the source remains unchanged."""
+    return _run("make_mesh_solid", {"object_name": object_name, "output_name": output_name, "thickness": thickness, "voxel_size": voxel_size})
+
+
+@mcp.tool()
 def set_modifier_parameter(object_name: str, modifier_name: str, parameter: str, value: float) -> str:
     """Set a limited V2 modifier parameter: levels, thickness or ratio."""
     return _run("set_modifier_parameter", {"object_name": object_name, "modifier_name": modifier_name, "parameter": parameter, "value": value})

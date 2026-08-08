@@ -203,3 +203,18 @@ def test_sculpt_smooth_region_is_bounded_and_explicit():
     assert params["vertex_indices"] == [0, 1]
     with pytest.raises(bridge_protocol.ProtocolError, match="distinct"):
         bridge_protocol.parse_operation_request(request("sculpt_smooth_region", {"object_name": "Asset", "vertex_indices": [0, 0]}), TOKEN)
+
+
+def test_solidify_mesh_is_bounded_and_reversible_by_contract():
+    operation, params = bridge_protocol.parse_operation_request(request("solidify_mesh", {"object_name": "Surface", "thickness": 0.2, "fill_rim": True}), TOKEN)
+    assert operation == "solidify_mesh"
+    assert params["offset"] == -1.0
+    with pytest.raises(bridge_protocol.ProtocolError, match="thickness"):
+        bridge_protocol.parse_operation_request(request("solidify_mesh", {"object_name": "Surface", "thickness": 0}), TOKEN)
+
+
+def test_make_mesh_solid_requires_a_distinct_output():
+    operation, params = bridge_protocol.parse_operation_request(request("make_mesh_solid", {"object_name": "Podocyte", "output_name": "PodocyteSolid", "thickness": 0.1, "voxel_size": 0.05}), TOKEN)
+    assert operation == "make_mesh_solid"
+    with pytest.raises(bridge_protocol.ProtocolError, match="must differ"):
+        bridge_protocol.parse_operation_request(request("make_mesh_solid", {"object_name": "Podocyte", "output_name": "Podocyte", "thickness": 0.1, "voxel_size": 0.05}), TOKEN)
