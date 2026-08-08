@@ -15,6 +15,7 @@ from .docs_index import initialize as initialize_docs, search as search_docs
 from .evaluator import diff_reports
 from .router import route
 from .skill_registry import content as skill_content, discover as discover_skills
+from .visual_review import next_visual_review_step as decide_next_visual_review_step, validate_visual_review
 
 mcp = FastMCP("Harness Blender V1")
 _connection = BlenderConnection()
@@ -46,6 +47,18 @@ def route_blender_task(task: str) -> str:
 def diff_evaluation_reports(before: dict[str, Any], after: dict[str, Any]) -> str:
     """Compare two V4 read-only evaluation reports without contacting Blender."""
     return json.dumps(diff_reports(before, after), ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def validate_visual_review_report(review: dict[str, Any]) -> str:
+    """Validate a structured observation made from controlled views; it never edits Blender."""
+    return json.dumps(validate_visual_review(review), ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def next_visual_review_step(review: dict[str, Any], iteration: int = 0, max_iterations: int = 3) -> str:
+    """Apply V5's 1-5 iteration limit and return whether another correction may be attempted."""
+    return json.dumps(decide_next_visual_review_step(review, iteration, max_iterations), ensure_ascii=False, indent=2)
 
 
 @mcp.tool()
@@ -576,11 +589,12 @@ def v5_capabilities() -> str:
     """Describe the first V5 visual-capture capability."""
     payload = {
         "version": "0.6.0-v5-vision",
-        "tools": ["capture_controlled_view"],
+        "tools": ["capture_controlled_view", "validate_visual_review_report", "next_visual_review_step"],
         "views": ["front", "back", "left", "right", "top", "bottom", "perspective"],
         "requires_gui": True,
         "temporary_directory": "HARNESS_BLENDER_TEMP_DIR",
-        "not_yet_available": ["visual verdict", "automatic correction loop"],
+        "limits": {"default_iterations": 3, "maximum_iterations": 5, "correction_execution": "delegated to existing typed tools"},
+        "not_yet_available": ["built-in vision model", "automatic technique selection"],
     }
     return json.dumps(payload, ensure_ascii=False, indent=2)
 

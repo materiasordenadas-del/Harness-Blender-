@@ -22,7 +22,7 @@ visual no sustituye las mediciones de malla, volumen, grosor o intersección.
 
 ## Ciclo de corrección
 
-El ciclo futuro será `plan → ejecutar → medir → revisar → corregir`.
+El ciclo es `plan → ejecutar → medir → revisar → corregir`.
 Por defecto tendrá un máximo de 3 iteraciones y nunca podrá superar 5. No se
 corregirá nada si las métricas y la revisión visual ya indican `pass`.
 
@@ -32,5 +32,8 @@ Se define el contrato, se enrutan las tareas visuales y se implementa
 `capture_controlled_view` en Blender GUI. La captura acepta solo vistas fijas,
 puede encuadrar un objeto por nombre y restaura la selección y la vista previa.
 
-La siguiente entrega definirá la evaluación visual estructurada. No se activará
-ninguna corrección automática hasta entonces.
+La evaluación visual estructurada valida `pass`, `needs_correction` o
+`needs_review`, junto con confianza e incidencias por región. El controlador
+solo permite otra corrección si hay incidencias y aún queda una iteración. No
+elige ni ejecuta una técnica: eso sigue correspondiendo a las tools tipadas y,
+más adelante, al planner de V9.
