@@ -304,6 +304,55 @@ def bridge_edge_loops(params: dict[str, Any]) -> dict[str, Any]:
     return {"object_name": obj.name, "faces_created": len(result["faces"]), "faces": len(obj.data.polygons)}
 
 
+def split_mesh_by_plane(params: dict[str, Any]) -> dict[str, Any]:
+    """Create two capped meshes and retain the source as a hidden reversible backup."""
+    obj = _mesh_object(params["object_name"])
+    if bpy.data.objects.get(params["positive_name"]) or bpy.data.objects.get(params["negative_name"]):
+        raise ValueError("Split output object name already exists")
+    inverse = obj.matrix_world.inverted()
+    point = inverse @ Vector(params["plane_point"])
+    normal = (inverse.transposed().to_3x3() @ Vector(params["plane_normal"])).normalized()
+    created: list[bpy.types.Object] = []
+    source_hidden, source_render = obj.hide_get(), obj.hide_render
+    try:
+        for name, clear_inner, clear_outer in ((params["positive_name"], True, False), (params["negative_name"], False, True)):
+            bm = bmesh.new()
+            try:
+                bm.from_mesh(obj.data)
+                cut = bmesh.ops.bisect_plane(bm, geom=list(bm.verts) + list(bm.edges) + list(bm.faces), plane_co=point, plane_no=normal, clear_inner=clear_inner, clear_outer=clear_outer)
+                if params["cap"]:
+                    cut_edges = [item for item in cut.get("geom_cut", []) if isinstance(item, bmesh.types.BMEdge) and item.is_valid and item.is_boundary]
+                    if cut_edges:
+                        bmesh.ops.holes_fill(bm, edges=cut_edges, sides=0)
+                if not bm.faces:
+                    raise ValueError("Cut plane does not produce two non-empty mesh parts")
+                mesh = bpy.data.meshes.new(name)
+                bm.to_mesh(mesh)
+                mesh.update()
+            finally:
+                bm.free()
+            part = obj.copy(); part.name = name; part.data = mesh
+            for collection in obj.users_collection or (bpy.context.collection,):
+                collection.objects.link(part)
+            created.append(part)
+        obj.hide_set(True); obj.hide_render = True
+    except Exception:
+        for part in created:
+            bpy.data.objects.remove(part, do_unlink=True)
+        raise
+
+    def restore() -> None:
+        for part in created:
+            current = bpy.data.objects.get(part.name)
+            if current is not None:
+                bpy.data.objects.remove(current, do_unlink=True)
+        obj.hide_set(source_hidden); obj.hide_render = source_render
+        bpy.context.view_layer.update()
+
+    _record_undo("split mesh by plane", restore)
+    return {"source_backup": obj.name, "positive_object": created[0].name, "negative_object": created[1].name, "source_hidden": True, "cap": params["cap"]}
+
+
 def fill_hole(params: dict[str, Any]) -> dict[str, Any]:
     obj = _mesh_object(params["object_name"])
     snapshot = _topology_snapshot(obj.data)

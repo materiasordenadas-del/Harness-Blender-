@@ -449,6 +449,7 @@ OPERATIONS: dict[str, Operation] = {
     "apply_modifier": mesh_operations.apply_modifier,
     "merge_vertices": mesh_operations.merge_vertices,
     "bridge_edge_loops": mesh_operations.bridge_edge_loops,
+    "split_mesh_by_plane": mesh_operations.split_mesh_by_plane,
     "fill_hole": mesh_operations.fill_hole,
     "boolean_union": lambda params: mesh_operations.boolean_operation(params, "UNION"),
     "boolean_difference": lambda params: mesh_operations.boolean_operation(params, "DIFFERENCE"),

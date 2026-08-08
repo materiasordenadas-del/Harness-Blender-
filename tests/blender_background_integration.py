@@ -253,6 +253,20 @@ def main() -> None:
     dispatch_operation("undo", {})
     assert not any(item.type == "NODES" for item in bpy.data.objects["V6_Branch_Main"].modifiers)
 
+    bpy.ops.mesh.primitive_cube_add(size=2)
+    split_source = bpy.context.object
+    split_source.name = "V2_Split_Source"
+    split = dispatch_operation("split_mesh_by_plane", {"object_name": split_source.name, "plane_point": [0, 0, 0], "plane_normal": [1, 0, 0], "positive_name": "V2_Split_Positive", "negative_name": "V2_Split_Negative", "cap": True})
+    assert split["source_hidden"] is True
+    assert split_source.hide_get() is True
+    for name in ("V2_Split_Positive", "V2_Split_Negative"):
+        report = dispatch_operation("evaluate_mesh", {"object_name": name})
+        assert report["is_closed_manifold"] is True
+    dispatch_operation("undo", {})
+    assert bpy.data.objects.get("V2_Split_Positive") is None
+    assert bpy.data.objects.get("V2_Split_Negative") is None
+    assert split_source.hide_get() is False
+
     print("HARNESS_BLENDER_BACKGROUND_INTEGRATION_OK")
 
 

@@ -149,3 +149,11 @@ def test_procedural_branching_requires_distinct_curve_names():
     operation, params = bridge_protocol.parse_operation_request(request("create_procedural_branching_setup", {"main_curve_name": "Main", "branch_curve_names": ["Branch"], "group_name": "Branches", "profile_radius": 0.1, "resample_length": 0.2}), TOKEN)
     assert operation == "create_procedural_branching_setup"
     assert params["branch_curve_names"] == ["Branch"]
+
+
+def test_plane_split_is_typed_and_rejects_zero_normal():
+    operation, params = bridge_protocol.parse_operation_request(request("split_mesh_by_plane", {"object_name": "Source", "plane_point": [0, 0, 0], "plane_normal": [1, 0, 0], "positive_name": "Left", "negative_name": "Right"}), TOKEN)
+    assert operation == "split_mesh_by_plane"
+    assert params["cap"] is True
+    with pytest.raises(bridge_protocol.ProtocolError, match="must not be zero"):
+        bridge_protocol.parse_operation_request(request("split_mesh_by_plane", {"object_name": "Source", "plane_point": [0, 0, 0], "plane_normal": [0, 0, 0], "positive_name": "Left", "negative_name": "Right"}), TOKEN)

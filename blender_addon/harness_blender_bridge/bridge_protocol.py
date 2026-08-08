@@ -39,7 +39,7 @@ ALLOWED_OPERATIONS = {
     "set_modifier_parameter",
     "remove_modifier",
     "apply_modifier",
-    "merge_vertices", "bridge_edge_loops",
+    "merge_vertices", "bridge_edge_loops", "split_mesh_by_plane",
     "fill_hole",
     "boolean_union", "boolean_difference", "boolean_intersection",
     "decimate_mesh", "voxel_remesh",
@@ -271,6 +271,24 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         if "object_name" not in params:
             raise ProtocolError("inspect_curve requires object_name")
         return {"object_name": _name(params["object_name"], "object_name")}
+
+    if operation == "split_mesh_by_plane":
+        allowed = {"object_name", "plane_point", "plane_normal", "positive_name", "negative_name", "cap"}
+        _reject_unknown_keys(params, allowed, where="split_mesh_by_plane parameter")
+        required = {"object_name", "plane_point", "plane_normal", "positive_name", "negative_name"}
+        if not required <= set(params):
+            raise ProtocolError("split_mesh_by_plane requires object, plane and both output names")
+        source = _name(params["object_name"], "object_name")
+        positive, negative = _name(params["positive_name"], "positive_name"), _name(params["negative_name"], "negative_name")
+        if len({source, positive, negative}) != 3:
+            raise ProtocolError("split output names must be distinct from each other and the source")
+        normal = _vec3(params["plane_normal"], "plane_normal")
+        if sum(value * value for value in normal) == 0:
+            raise ProtocolError("plane_normal must not be zero")
+        cap = params.get("cap", True)
+        if not isinstance(cap, bool):
+            raise ProtocolError("cap must be a boolean")
+        return {"object_name": source, "plane_point": _vec3(params["plane_point"], "plane_point"), "plane_normal": normal, "positive_name": positive, "negative_name": negative, "cap": cap}
 
     if operation == "evaluate_spatial":
         _reject_unknown_keys(params, {"object_name", "target_object_name"}, where="evaluate_spatial parameter")

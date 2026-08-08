@@ -353,6 +353,12 @@ def bridge_edge_loops(object_name: str, edge_indices: list[int]) -> str:
 
 
 @mcp.tool()
+def split_mesh_by_plane(object_name: str, plane_point: list[float], plane_normal: list[float], positive_name: str, negative_name: str, cap: bool = True) -> str:
+    """Create two capped mesh outputs; retain the source hidden for reversible recovery."""
+    return _run("split_mesh_by_plane", {"object_name": object_name, "plane_point": plane_point, "plane_normal": plane_normal, "positive_name": positive_name, "negative_name": negative_name, "cap": cap})
+
+
+@mcp.tool()
 def fill_hole(object_name: str, boundary_edge_indices: list[int]) -> str:
     """Fill one closed boundary loop chosen by edge indices, reversibly."""
     return _run("fill_hole", {"object_name": object_name, "boundary_edge_indices": boundary_edge_indices})
