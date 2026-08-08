@@ -199,6 +199,24 @@ def main() -> None:
     assert_close([mesh_report["surface_area"], mesh_report["volume"]], [24.0, 8.0])
     assert mesh_report["self_intersections"] == 0
     assert mesh_report["inconsistent_normal_edges"] == 0
+    asset_readiness = dispatch_operation("evaluate_asset_readiness", {"object_name": evaluated_mesh.name})
+    assert asset_readiness["status"] == "needs_review"
+    assert asset_readiness["blockers"] == []
+    assert "materials" in asset_readiness["needs_review"]
+    uv_report = dispatch_operation("inspect_uv", {"object_name": evaluated_mesh.name})
+    assert uv_report["has_uv"] is True
+    assert uv_report["active_layer"] is not None
+    assert uv_report["layers"][0]["loop_count"] == len(evaluated_mesh.data.loops)
+    unwrapped = dispatch_operation("unwrap_uv", {"object_name": evaluated_mesh.name, "method": "ANGLE_BASED", "margin": 0.01})
+    assert unwrapped["method"] == "ANGLE_BASED"
+    assert unwrapped["uv"]["has_uv"] is True
+    dispatch_operation("undo", {})
+    assert dispatch_operation("inspect_uv", {"object_name": evaluated_mesh.name}) == uv_report
+    before_sculpt = [tuple(vertex.co) for vertex in evaluated_mesh.data.vertices]
+    sculpted = dispatch_operation("sculpt_smooth_region", {"object_name": evaluated_mesh.name, "vertex_indices": [0, 1], "factor": 0.4, "iterations": 1})
+    assert sculpted["vertex_indices"] == [0, 1]
+    dispatch_operation("undo", {})
+    assert [tuple(vertex.co) for vertex in evaluated_mesh.data.vertices] == before_sculpt
 
     bpy.ops.mesh.primitive_cube_add(size=2, location=(4, 0, 0))
     target_mesh = bpy.context.object

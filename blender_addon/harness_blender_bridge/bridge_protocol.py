@@ -20,6 +20,7 @@ ALLOWED_OPERATIONS = {
     "inspect_scene",
     "inspect_scene_detailed",
     "evaluate_mesh",
+    "evaluate_asset_readiness",
     "evaluate_spatial",
     "evaluate_tubular",
     "evaluate_penetration",
@@ -29,6 +30,9 @@ ALLOWED_OPERATIONS = {
     "delete_object",
     "validate_mesh",
     "inspect_mesh_detailed",
+    "inspect_uv",
+    "unwrap_uv",
+    "sculpt_smooth_region",
     "evaluate_mesh",
     "recalculate_normals",
     "flip_normals",
@@ -205,7 +209,7 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         _reject_unknown_keys(params, {"object_name"}, where="inspect_geometry_node_tree parameter")
         return {"object_name": _name(params.get("object_name"), "object_name")}
 
-    if operation in {"inspect_object", "delete_object", "validate_mesh", "inspect_mesh_detailed", "evaluate_mesh"}:
+    if operation in {"inspect_object", "delete_object", "validate_mesh", "inspect_mesh_detailed", "inspect_uv", "evaluate_mesh", "evaluate_asset_readiness"}:
         _reject_unknown_keys(params, {"object_name"}, where=f"{operation} parameter")
         if "object_name" not in params:
             raise ProtocolError(f"{operation} requires object_name")
@@ -272,6 +276,30 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         if "object_name" not in params:
             raise ProtocolError("inspect_curve requires object_name")
         return {"object_name": _name(params["object_name"], "object_name")}
+
+    if operation == "unwrap_uv":
+        allowed = {"object_name", "method", "margin"}
+        _reject_unknown_keys(params, allowed, where="unwrap_uv parameter")
+        if "object_name" not in params:
+            raise ProtocolError("unwrap_uv requires object_name")
+        method = params.get("method", "ANGLE_BASED")
+        if method not in {"ANGLE_BASED", "CONFORMAL"}:
+            raise ProtocolError("unwrap_uv method must be ANGLE_BASED or CONFORMAL")
+        return {
+            "object_name": _name(params["object_name"], "object_name"),
+            "method": method,
+            "margin": _number(params.get("margin", 0.001), "margin", minimum=0.0, maximum=1.0),
+        }
+
+    if operation == "sculpt_smooth_region":
+        allowed = {"object_name", "vertex_indices", "factor", "iterations"}
+        _reject_unknown_keys(params, allowed, where="sculpt_smooth_region parameter")
+        if not {"object_name", "vertex_indices"} <= set(params):
+            raise ProtocolError("sculpt_smooth_region requires object_name and vertex_indices")
+        indices = params["vertex_indices"]
+        if not isinstance(indices, list) or not 1 <= len(indices) <= 256 or any(not isinstance(item, int) or item < 0 for item in indices) or len(indices) != len(set(indices)):
+            raise ProtocolError("vertex_indices must contain 1-256 distinct non-negative integers")
+        return {"object_name": _name(params["object_name"], "object_name"), "vertex_indices": indices, "factor": _number(params.get("factor", 0.5), "factor", minimum=0.0, maximum=1.0), "iterations": _integer(params.get("iterations", 1), "iterations", minimum=1, maximum=10)}
 
     if operation == "split_mesh_by_plane":
         allowed = {"object_name", "plane_point", "plane_normal", "positive_name", "negative_name", "cap"}

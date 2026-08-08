@@ -233,9 +233,33 @@ def inspect_mesh_detailed(object_name: str) -> str:
 
 
 @mcp.tool()
+def inspect_uv(object_name: str) -> str:
+    """Read UV-layer names, active layer, coordinate counts and bounds without editing."""
+    return _run("inspect_uv", {"object_name": object_name})
+
+
+@mcp.tool()
+def unwrap_uv(object_name: str, method: str = "ANGLE_BASED", margin: float = 0.001) -> str:
+    """Unwrap a mesh UV map with a full in-memory snapshot for Harness undo."""
+    return _run("unwrap_uv", {"object_name": object_name, "method": method, "margin": margin})
+
+
+@mcp.tool()
+def sculpt_smooth_region(object_name: str, vertex_indices: list[int], factor: float = 0.5, iterations: int = 1) -> str:
+    """Smooth only named mesh vertices with an in-memory topology snapshot for undo."""
+    return _run("sculpt_smooth_region", {"object_name": object_name, "vertex_indices": vertex_indices, "factor": factor, "iterations": iterations})
+
+
+@mcp.tool()
 def evaluate_mesh(object_name: str) -> str:
     """Measure mesh topology, area, volume and world bounding box without editing it."""
     return _run("evaluate_mesh", {"object_name": object_name})
+
+
+@mcp.tool()
+def evaluate_asset_readiness(object_name: str) -> str:
+    """Check a mesh for V7 production readiness without changing Blender."""
+    return _run("evaluate_asset_readiness", {"object_name": object_name})
 
 
 @mcp.tool()
@@ -762,6 +786,20 @@ def v6_capabilities() -> str:
         "inputs": {"profile_radius": "0.001-1000", "resample_length": "0.001-1000"},
         "reversible": True,
         "not_yet_available": ["scatter", "instances", "procedural branching"],
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+@mcp.resource("harness://v7/capabilities")
+def v7_capabilities() -> str:
+    """Describe the first read-only V7 asset-production check."""
+    payload = {
+        "version": "0.8.0-v7-production",
+        "read_only": True,
+        "tools": ["evaluate_asset_readiness", "inspect_uv", "unwrap_uv"],
+        "status": ["ready", "needs_review", "blocked"],
+        "checks": ["mesh health", "transform", "collections", "materials", "UV layer metadata"],
+        "not_yet_available": ["sculpt", "retopology", "UV overlap analysis"],
     }
     return json.dumps(payload, ensure_ascii=False, indent=2)
 

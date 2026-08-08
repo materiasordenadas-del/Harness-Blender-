@@ -71,6 +71,52 @@ def evaluate_mesh(params: dict[str, Any]) -> dict[str, Any]:
         bm.free()
 
 
+def evaluate_asset_readiness(params: dict[str, Any]) -> dict[str, Any]:
+    """Assess production prerequisites without editing the named mesh."""
+    obj = bpy.data.objects.get(params["object_name"])
+    if obj is None or obj.type != "MESH":
+        raise TypeError("evaluate_asset_readiness requires an existing MESH object")
+
+    mesh = evaluate_mesh(params)
+    blockers: list[str] = []
+    review_items: list[str] = []
+    for field in ("non_manifold_edges", "loose_edges", "degenerate_faces", "self_intersections", "inconsistent_normal_edges"):
+        if mesh[field]:
+            blockers.append(field)
+    if mesh["boundary_edges"]:
+        review_items.append("boundary_edges")
+    if not obj.users_collection:
+        review_items.append("collections")
+    if not any(slot.material for slot in obj.material_slots):
+        review_items.append("materials")
+    else:
+        materials = [slot.material for slot in obj.material_slots if slot.material]
+        if any(not material.use_nodes or not material.node_tree or material.node_tree.nodes.get("Principled BSDF") is None for material in materials):
+            review_items.append("principled_material")
+    if not obj.data.uv_layers:
+        review_items.append("uv_layers")
+    if any(abs(value - 1.0) > 1e-6 for value in obj.scale):
+        review_items.append("unapplied_scale")
+    if any(abs(value) > 1e-6 for value in obj.rotation_euler):
+        review_items.append("unapplied_rotation")
+
+    status = "blocked" if blockers else "needs_review" if review_items else "ready"
+    return {
+        "object_name": obj.name,
+        "status": status,
+        "blockers": blockers,
+        "needs_review": review_items,
+        "mesh": mesh,
+        "transform": {
+            "location": [float(value) for value in obj.location],
+            "rotation_euler": [float(value) for value in obj.rotation_euler],
+            "scale": [float(value) for value in obj.scale],
+        },
+        "collections": [collection.name for collection in obj.users_collection],
+        "materials": [slot.material.name if slot.material else None for slot in obj.material_slots],
+    }
+
+
 def _world_bounds(obj: bpy.types.Object) -> tuple[Vector, Vector]:
     corners = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
     return (

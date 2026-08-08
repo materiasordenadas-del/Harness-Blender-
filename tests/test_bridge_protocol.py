@@ -157,3 +157,45 @@ def test_plane_split_is_typed_and_rejects_zero_normal():
     assert params["cap"] is True
     with pytest.raises(bridge_protocol.ProtocolError, match="must not be zero"):
         bridge_protocol.parse_operation_request(request("split_mesh_by_plane", {"object_name": "Source", "plane_point": [0, 0, 0], "plane_normal": [0, 0, 0], "positive_name": "Left", "negative_name": "Right"}), TOKEN)
+
+
+def test_asset_readiness_is_typed_and_rejects_extra_fields():
+    operation, params = bridge_protocol.parse_operation_request(
+        request("evaluate_asset_readiness", {"object_name": "Asset"}), TOKEN
+    )
+    assert operation == "evaluate_asset_readiness"
+    assert params == {"object_name": "Asset"}
+    with pytest.raises(bridge_protocol.ProtocolError, match="Unknown evaluate_asset_readiness parameter"):
+        bridge_protocol.parse_operation_request(
+            request("evaluate_asset_readiness", {"object_name": "Asset", "apply": True}), TOKEN
+        )
+
+
+def test_uv_inspection_is_typed_and_read_only():
+    operation, params = bridge_protocol.parse_operation_request(
+        request("inspect_uv", {"object_name": "Asset"}), TOKEN
+    )
+    assert operation == "inspect_uv"
+    assert params == {"object_name": "Asset"}
+    with pytest.raises(bridge_protocol.ProtocolError, match="Unknown inspect_uv parameter"):
+        bridge_protocol.parse_operation_request(
+            request("inspect_uv", {"object_name": "Asset", "create": True}), TOKEN
+        )
+
+
+def test_uv_unwrap_has_bounded_typed_parameters():
+    operation, params = bridge_protocol.parse_operation_request(
+        request("unwrap_uv", {"object_name": "Asset", "method": "CONFORMAL", "margin": 0.02}), TOKEN
+    )
+    assert operation == "unwrap_uv"
+    assert params == {"object_name": "Asset", "method": "CONFORMAL", "margin": 0.02}
+    with pytest.raises(bridge_protocol.ProtocolError, match="ANGLE_BASED or CONFORMAL"):
+        bridge_protocol.parse_operation_request(request("unwrap_uv", {"object_name": "Asset", "method": "SMART_PROJECT"}), TOKEN)
+
+
+def test_sculpt_smooth_region_is_bounded_and_explicit():
+    operation, params = bridge_protocol.parse_operation_request(request("sculpt_smooth_region", {"object_name": "Asset", "vertex_indices": [0, 1], "factor": 0.4, "iterations": 2}), TOKEN)
+    assert operation == "sculpt_smooth_region"
+    assert params["vertex_indices"] == [0, 1]
+    with pytest.raises(bridge_protocol.ProtocolError, match="distinct"):
+        bridge_protocol.parse_operation_request(request("sculpt_smooth_region", {"object_name": "Asset", "vertex_indices": [0, 0]}), TOKEN)

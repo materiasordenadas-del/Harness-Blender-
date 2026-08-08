@@ -61,6 +61,125 @@ def inspect_mesh_detailed(params: dict[str, Any]) -> dict[str, Any]:
         bm.free()
 
 
+def inspect_uv(params: dict[str, Any]) -> dict[str, Any]:
+    """Report UV-layer metadata and coordinate bounds without editing the mesh."""
+    obj = _mesh_object(params["object_name"])
+    layers: list[dict[str, Any]] = []
+    for layer in obj.data.uv_layers:
+        coordinates = [loop.uv for loop in layer.data]
+        if coordinates:
+            minimum = [min(float(uv[axis]) for uv in coordinates) for axis in range(2)]
+            maximum = [max(float(uv[axis]) for uv in coordinates) for axis in range(2)]
+        else:
+            minimum = maximum = [0.0, 0.0]
+        layers.append({
+            "name": layer.name,
+            "active": layer is obj.data.uv_layers.active,
+            "render": layer.active_render,
+            "loop_count": len(layer.data),
+            "bounds": {"min": minimum, "max": maximum},
+        })
+    return {
+        "object_name": obj.name,
+        "has_uv": bool(layers),
+        "active_layer": obj.data.uv_layers.active.name if obj.data.uv_layers.active else None,
+        "layer_count": len(layers),
+        "layers": layers,
+    }
+
+
+def _uv_snapshot(mesh: bpy.types.Mesh) -> dict[str, Any]:
+    return {
+        "active_index": mesh.uv_layers.active_index,
+        "layers": [
+            {
+                "name": layer.name,
+                "active_render": layer.active_render,
+                "coordinates": [tuple(loop.uv) for loop in layer.data],
+            }
+            for layer in mesh.uv_layers
+        ],
+    }
+
+
+def _restore_uv(mesh: bpy.types.Mesh, snapshot: dict[str, Any]) -> None:
+    while mesh.uv_layers:
+        mesh.uv_layers.remove(mesh.uv_layers[0])
+    for saved in snapshot["layers"]:
+        layer = mesh.uv_layers.new(name=saved["name"])
+        for loop, coordinate in zip(layer.data, saved["coordinates"]):
+            loop.uv = coordinate
+        layer.active_render = saved["active_render"]
+    if snapshot["layers"]:
+        mesh.uv_layers.active_index = snapshot["active_index"]
+    mesh.update()
+
+
+def unwrap_uv(params: dict[str, Any]) -> dict[str, Any]:
+    """Unwrap all mesh faces and register a full UV-layer restoration action."""
+    obj = _mesh_object(params["object_name"])
+    if bpy.context.mode != "OBJECT":
+        raise RuntimeError("unwrap_uv requires Blender Object Mode")
+    snapshot = _uv_snapshot(obj.data)
+    selected = list(bpy.context.selected_objects)
+    active = bpy.context.view_layer.objects.active
+    try:
+        for item in selected:
+            item.select_set(False)
+        obj.select_set(True)
+        bpy.context.view_layer.objects.active = obj
+        if not obj.data.uv_layers:
+            obj.data.uv_layers.new(name="UVMap")
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.mesh.select_all(action="SELECT")
+        result = bpy.ops.uv.unwrap(method=params["method"], margin=params["margin"])
+        bpy.ops.object.mode_set(mode="OBJECT")
+        if "FINISHED" not in result:
+            raise RuntimeError("Blender did not finish UV unwrap")
+    except Exception:
+        if bpy.context.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT")
+        _restore_uv(obj.data, snapshot)
+        raise
+    finally:
+        for item in list(bpy.context.selected_objects):
+            item.select_set(False)
+        for item in selected:
+            item.select_set(True)
+        bpy.context.view_layer.objects.active = active
+    _record_undo("unwrap UV", lambda: _restore_uv(obj.data, snapshot))
+    report = inspect_uv({"object_name": obj.name})
+    return {"object_name": obj.name, "method": params["method"], "margin": params["margin"], "uv": report}
+
+
+def sculpt_smooth_region(params: dict[str, Any]) -> dict[str, Any]:
+    """Smooth named vertices only; this is a bounded, undoable sculpt-like edit."""
+    obj = _mesh_object(params["object_name"])
+    snapshot = _topology_snapshot(obj.data)
+    bm = bmesh.new()
+    try:
+        bm.from_mesh(obj.data)
+        bm.verts.ensure_lookup_table()
+        if any(index >= len(bm.verts) for index in params["vertex_indices"]):
+            raise ValueError("vertex_indices contains an index outside the mesh")
+        vertices = [bm.verts[index] for index in params["vertex_indices"]]
+        for _ in range(params["iterations"]):
+            positions = {}
+            for vertex in vertices:
+                neighbours = [edge.other_vert(vertex) for edge in vertex.link_edges]
+                if neighbours:
+                    average = sum((item.co for item in neighbours), Vector()) / len(neighbours)
+                    positions[vertex] = vertex.co.lerp(average, params["factor"])
+            for vertex, coordinate in positions.items():
+                vertex.co = coordinate
+        bm.to_mesh(obj.data)
+        obj.data.update()
+    finally:
+        bm.free()
+    _record_undo("sculpt smooth region", lambda: _restore_topology(obj.data, snapshot))
+    return {"object_name": obj.name, "vertex_indices": params["vertex_indices"], "factor": params["factor"], "iterations": params["iterations"]}
+
+
 def recalculate_normals(params: dict[str, Any]) -> dict[str, Any]:
     obj = _mesh_object(params["object_name"])
     snapshot = _topology_snapshot(obj.data)
