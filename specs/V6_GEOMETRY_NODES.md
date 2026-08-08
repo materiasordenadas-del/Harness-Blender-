@@ -37,10 +37,11 @@ curva de entrada, remuestreo opcional, perfil circular y conversión a malla.
 - `curve_resampling`: remuestrea una curva con longitud o cantidad explícita.
 - `radius_control`: permite variar el radio antes de convertir a malla.
 - `surface_scatter`: superficie MESH + instancia separada → puntos sobre caras → instancias, con densidad explícita y Undo.
+- `procedural_branching`: curva principal + ramas CURVE → unión de curvas → remuestreo → tubo, con Undo.
 
 ## Fuera de alcance inicial
 
 - No se exponen decenas de nodos individuales.
 - No se aceptan scripts Python por MCP.
-- Instancing, scatter y ramificación procedural quedan para entregas posteriores
-  de V6, después de probar el tubo base.
+- No se fusionan automáticamente las ramas en una única malla ni se aplican los
+  modificadores sin una solicitud explícita.
