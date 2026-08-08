@@ -389,6 +389,24 @@ def _op_create_procedural_tube_setup(params: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _op_create_surface_scatter_setup(params: dict[str, Any]) -> dict[str, Any]:
+    result = geometry_nodes_operations.create_surface_scatter_setup(params)
+    surface_name, modifier_name, group_name = result["surface_object_name"], result["modifier_name"], result["group_name"]
+
+    def restore() -> None:
+        surface = bpy.data.objects.get(surface_name)
+        modifier = surface.modifiers.get(modifier_name) if surface else None
+        if modifier is not None:
+            surface.modifiers.remove(modifier)
+        group = bpy.data.node_groups.get(group_name)
+        if group is not None and group.users == 0:
+            bpy.data.node_groups.remove(group)
+        bpy.context.view_layer.update()
+
+    _record_undo(f"create Geometry Nodes scatter {group_name}", restore)
+    return result
+
+
 Operation = Callable[[dict[str, Any]], dict[str, Any]]
 OPERATIONS: dict[str, Operation] = {
     "ping": _op_ping,
@@ -431,6 +449,7 @@ OPERATIONS: dict[str, Operation] = {
     "capture_screen": _op_capture_screen,
     "capture_controlled_view": _op_capture_controlled_view,
     "create_procedural_tube_setup": _op_create_procedural_tube_setup,
+    "create_surface_scatter_setup": _op_create_surface_scatter_setup,
     "inspect_geometry_node_tree": geometry_nodes_operations.inspect_geometry_node_tree,
     "create_curve": curve_operations.create_curve,
     "inspect_curve": curve_operations.inspect_curve,

@@ -29,3 +29,11 @@ def test_tubular_packet_requires_two_mesh_targets():
     )
     assert packet["precondition_checks"][0]["requirement"] == "two MESH targets"
     assert packet["precondition_checks"][0]["status"] == "blocked"
+
+
+def test_surface_scatter_packet_requires_surface_and_instance_meshes():
+    packet = enrich_task_packet(
+        build_task_packet("distribuye instancias sobre esta superficie"),
+        {"scene": "Main", "objects": [{"name": "Surface", "type": "MESH", "metrics": {}}]},
+    )
+    assert packet["precondition_checks"][0]["status"] == "blocked"

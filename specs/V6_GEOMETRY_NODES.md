@@ -36,6 +36,7 @@ curva de entrada, remuestreo opcional, perfil circular y conversión a malla.
 - `procedural_tube`: curva → resample opcional → Curve Circle → Curve to Mesh.
 - `curve_resampling`: remuestrea una curva con longitud o cantidad explícita.
 - `radius_control`: permite variar el radio antes de convertir a malla.
+- `surface_scatter`: superficie MESH + instancia separada → puntos sobre caras → instancias, con densidad explícita y Undo.
 
 ## Fuera de alcance inicial
 

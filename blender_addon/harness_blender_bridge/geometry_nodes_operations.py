@@ -81,3 +81,49 @@ def inspect_geometry_node_tree(params: dict[str, Any]) -> dict[str, Any]:
         "links": [{"from": link.from_node.name, "to": link.to_node.name} for link in group.links],
         "interface": sockets,
     }
+
+
+def create_surface_scatter_setup(params: dict[str, Any]) -> dict[str, Any]:
+    """Attach a reversible points-on-faces instancing recipe to one mesh surface."""
+    surface = bpy.data.objects.get(params["surface_object_name"])
+    instance = bpy.data.objects.get(params["instance_object_name"])
+    if surface is None or surface.type != "MESH":
+        raise TypeError("create_surface_scatter_setup requires a MESH surface object")
+    if instance is None:
+        raise ValueError("Instance object must exist")
+    group_name = params["group_name"]
+    if bpy.data.node_groups.get(group_name) is not None:
+        raise ValueError(f"A node group named {group_name!r} already exists")
+    modifier_name = f"Harness {group_name}"
+    if surface.modifiers.get(modifier_name) is not None:
+        raise ValueError(f"Surface already has modifier {modifier_name!r}")
+    group = bpy.data.node_groups.new(group_name, "GeometryNodeTree")
+    modifier = None
+    try:
+        group.is_modifier = True
+        group.interface.new_socket(name="Geometry", in_out="INPUT", socket_type="NodeSocketGeometry")
+        group.interface.new_socket(name="Density", in_out="INPUT", socket_type="NodeSocketFloat").default_value = params["density"]
+        group.interface.new_socket(name="Geometry", in_out="OUTPUT", socket_type="NodeSocketGeometry")
+        nodes, links = group.nodes, group.links
+        group_input = nodes.new("NodeGroupInput"); group_input.name = "Surface Input"
+        distribute = nodes.new("GeometryNodeDistributePointsOnFaces"); distribute.name = "Distribute Points on Faces"
+        object_info = nodes.new("GeometryNodeObjectInfo"); object_info.name = "Instance Object"; object_info.transform_space = "ORIGINAL"; object_info.inputs["Object"].default_value = instance
+        instance_on_points = nodes.new("GeometryNodeInstanceOnPoints"); instance_on_points.name = "Instance on Points"
+        join = nodes.new("GeometryNodeJoinGeometry"); join.name = "Join Surface and Instances"
+        group_output = nodes.new("NodeGroupOutput"); group_output.name = "Geometry Output"
+        links.new(group_input.outputs["Geometry"], distribute.inputs["Mesh"])
+        links.new(group_input.outputs["Density"], distribute.inputs["Density"])
+        links.new(distribute.outputs["Points"], instance_on_points.inputs["Points"])
+        links.new(object_info.outputs["Geometry"], instance_on_points.inputs["Instance"])
+        links.new(group_input.outputs["Geometry"], join.inputs["Geometry"])
+        links.new(instance_on_points.outputs["Instances"], join.inputs["Geometry"])
+        links.new(join.outputs["Geometry"], group_output.inputs["Geometry"])
+        modifier = surface.modifiers.new(name=modifier_name, type="NODES")
+        modifier.node_group = group
+        bpy.context.view_layer.update()
+        return {"surface_object_name": surface.name, "instance_object_name": instance.name, "modifier_name": modifier.name, "group_name": group.name, "density": params["density"], "nodes": [node.name for node in nodes]}
+    except Exception:
+        if modifier is not None:
+            surface.modifiers.remove(modifier)
+        bpy.data.node_groups.remove(group)
+        raise

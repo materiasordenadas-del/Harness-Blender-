@@ -228,6 +228,19 @@ def main() -> None:
     dispatch_operation("undo", {})
     assert not any(item.type == "NODES" for item in bpy.data.objects["V1_Background_Curve"].modifiers)
 
+    bpy.ops.mesh.primitive_plane_add(size=4)
+    scatter_surface = bpy.context.object
+    scatter_surface.name = "V6_Scatter_Surface"
+    bpy.ops.mesh.primitive_ico_sphere_add(radius=0.1, location=(0, 0, 2))
+    scatter_instance = bpy.context.object
+    scatter_instance.name = "V6_Scatter_Instance"
+    scatter = dispatch_operation("create_surface_scatter_setup", {"surface_object_name": scatter_surface.name, "instance_object_name": scatter_instance.name, "group_name": "V6_Background_Scatter", "density": 2.0})
+    assert scatter["group_name"] == "V6_Background_Scatter"
+    scatter_tree = dispatch_operation("inspect_geometry_node_tree", {"object_name": scatter_surface.name})
+    assert {node["name"] for node in scatter_tree["nodes"]} >= {"Surface Input", "Distribute Points on Faces", "Instance Object", "Instance on Points", "Join Surface and Instances", "Geometry Output"}
+    dispatch_operation("undo", {})
+    assert not any(item.type == "NODES" for item in scatter_surface.modifiers)
+
     print("HARNESS_BLENDER_BACKGROUND_INTEGRATION_OK")
 
 

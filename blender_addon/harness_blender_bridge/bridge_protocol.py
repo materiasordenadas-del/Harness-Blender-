@@ -48,6 +48,7 @@ ALLOWED_OPERATIONS = {
     "capture_screen",
     "capture_controlled_view",
     "create_procedural_tube_setup",
+    "create_surface_scatter_setup",
     "inspect_geometry_node_tree",
     "create_curve",
     "inspect_curve",
@@ -172,6 +173,17 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
             "profile_radius": _number(params.get("profile_radius"), "profile_radius", minimum=0.001, maximum=1000.0),
             "resample_length": _number(params.get("resample_length"), "resample_length", minimum=0.001, maximum=1000.0),
         }
+
+    if operation == "create_surface_scatter_setup":
+        allowed = {"surface_object_name", "instance_object_name", "group_name", "density"}
+        _reject_unknown_keys(params, allowed, where="create_surface_scatter_setup parameter")
+        if set(params) != allowed:
+            raise ProtocolError("create_surface_scatter_setup requires surface, instance, group_name and density")
+        surface = _name(params["surface_object_name"], "surface_object_name")
+        instance = _name(params["instance_object_name"], "instance_object_name")
+        if surface == instance:
+            raise ProtocolError("surface_object_name and instance_object_name must differ")
+        return {"surface_object_name": surface, "instance_object_name": instance, "group_name": _name(params["group_name"], "group_name"), "density": _number(params["density"], "density", minimum=0.0001, maximum=1000.0)}
 
     if operation == "inspect_geometry_node_tree":
         _reject_unknown_keys(params, {"object_name"}, where="inspect_geometry_node_tree parameter")

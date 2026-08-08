@@ -16,6 +16,8 @@ def enrich_task_packet(packet: dict[str, Any], snapshot: dict[str, Any]) -> dict
         requirements.append(("two MESH targets", len(meshes) >= 2, "Identify two compatible mesh boundary loops."))
     if "procedural-tubes" in skills:
         requirements.append(("one CURVE input", bool(curves), "Select or create a CURVE input."))
+    if "surface-scatter" in skills:
+        requirements.append(("one MESH surface and a separate instance object", len(meshes) >= 2, "Identify a MESH surface and a different instance object."))
     checks = [
         {"requirement": name, "status": "passed" if passed else "blocked", "remedy": remedy}
         for name, passed, remedy in requirements

@@ -133,3 +133,13 @@ def test_procedural_tube_setup_is_typed_and_bounded():
         bridge_protocol.parse_operation_request(
             request("create_procedural_tube_setup", {"object_name": "Vessel", "group_name": "Bad", "profile_radius": 0, "resample_length": 0.5}), TOKEN,
         )
+
+
+def test_surface_scatter_setup_requires_distinct_objects_and_bounded_density():
+    operation, params = bridge_protocol.parse_operation_request(
+        request("create_surface_scatter_setup", {"surface_object_name": "Surface", "instance_object_name": "Pebble", "group_name": "Scatter", "density": 2.5}), TOKEN
+    )
+    assert operation == "create_surface_scatter_setup"
+    assert params["density"] == 2.5
+    with pytest.raises(bridge_protocol.ProtocolError, match="must differ"):
+        bridge_protocol.parse_operation_request(request("create_surface_scatter_setup", {"surface_object_name": "Surface", "instance_object_name": "Surface", "group_name": "Scatter", "density": 2.5}), TOKEN)

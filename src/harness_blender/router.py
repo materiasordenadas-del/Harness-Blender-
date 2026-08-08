@@ -28,6 +28,7 @@ class Intent:
 _INTENTS = (
     Intent("bezier_handles", ("curve-fundamentals", "smooth-curves"), 50, ("https://docs.blender.org/api/current/bpy.types.BezierSplinePoint.html",)),
     Intent("procedural_tubes", ("procedural-tubes",), 45, ("https://docs.blender.org/manual/en/latest/modeling/geometry_nodes/geometry/index.html",)),
+    Intent("surface_scatter", ("surface-scatter",), 45, ("https://docs.blender.org/manual/en/latest/modeling/geometry_nodes/geometry/operations/distribute_points_on_faces.html",)),
     Intent("visual_review", ("visual-review",), 40, ("https://docs.blender.org/manual/en/latest/editors/3dview/navigate/views.html",)),
     Intent("tubular_connection", ("tubular-connections", "smooth-transitions", "bridge-loops"), 35, ("https://docs.blender.org/api/current/bmesh.ops.html",)),
     Intent("boolean", ("booleans",), 30, ("https://docs.blender.org/manual/en/latest/modeling/modifiers/generate/boolean.html",)),

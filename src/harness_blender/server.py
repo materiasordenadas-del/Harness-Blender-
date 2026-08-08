@@ -601,6 +601,12 @@ def create_procedural_tube_setup(
 
 
 @mcp.tool()
+def create_surface_scatter_setup(surface_object_name: str, instance_object_name: str, group_name: str, density: float) -> str:
+    """Attach a reversible Geometry Nodes scatter recipe to a mesh surface."""
+    return _run("create_surface_scatter_setup", {"surface_object_name": surface_object_name, "instance_object_name": instance_object_name, "group_name": group_name, "density": density})
+
+
+@mcp.tool()
 def inspect_geometry_node_tree(object_name: str) -> str:
     """Inspect the Geometry Nodes group attached to one object."""
     return _run("inspect_geometry_node_tree", {"object_name": object_name})
