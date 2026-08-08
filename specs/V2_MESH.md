@@ -1,5 +1,17 @@
 # V2 — Malla y modelado orgánico
 
+## Source repositories
+
+### blender-mcp-n8n
+https://github.com/seehiong/blender-mcp-n8n
+
+Estudiar: categorías de booleans, remesh, topology y modifiers. No copiar tools sin límites o sin recuperación.
+
+### Blender API y BMesh
+https://docs.blender.org/api/current/bmesh.html
+
+Estudiar: conectividad y operaciones BMesh. La API oficial tiene prioridad.
+
 ## Alcance
 
 V2 permite operaciones topológicas tipadas sobre objetos `MESH`, después de que

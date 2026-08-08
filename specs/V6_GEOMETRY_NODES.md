@@ -1,5 +1,19 @@
 # V6 — Geometry Nodes
 
+## Source repositories
+
+### Blender Python API y Manual
+https://docs.blender.org/api/current/
+https://docs.blender.org/manual/en/latest/modeling/geometry_nodes/
+
+Estudiar: árboles, interfaz y sockets actuales. La API oficial tiene prioridad.
+
+### BlenderMCP y blender-mcp-n8n
+https://github.com/MCPBlender/blender-mcp
+https://github.com/seehiong/blender-mcp-n8n
+
+Estudiar: nombres semánticos y agrupación de capacidades. No copiar ejecución arbitraria ni exponer cada nodo como tool.
+
 ## Objetivo
 
 V6 permite crear estructuras procedurales reutilizables sin exponer un MCP tool

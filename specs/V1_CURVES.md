@@ -1,5 +1,18 @@
 # V1 — Curvas y estructuras tubulares
 
+## Source repositories
+
+### BlenderMCP
+https://github.com/MCPBlender/blender-mcp
+
+Estudiar: bridge MCP/add-on, inspección y screenshots. No copiar: Python arbitrario ni exposición remota.
+
+### blender-mcp-n8n y Blender API
+https://github.com/seehiong/blender-mcp-n8n
+https://docs.blender.org/api/current/
+
+Estudiar: organización de tools de curvas y contratos. La API oficial decide los tipos reales; no copiar catálogos completos.
+
 ## Alcance
 
 V1 añade curvas editables de tipo Bézier, NURBS y Poly. Todas las operaciones

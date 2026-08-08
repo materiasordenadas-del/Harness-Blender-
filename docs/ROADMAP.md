@@ -1,39 +1,18 @@
 # Roadmap
 
-## V0 — núcleo ejecutable
+Las fuentes que orientan cada fase están en [SOURCE_MAP.md](SOURCE_MAP.md) y en la sección obligatoria **Source repositories** de cada especificación.
 
-- Bridge local con token.
-- MCP model-agnostic.
-- Inspección, primitivas, transformaciones y eliminación.
-- Métricas básicas de malla.
-- Screenshot, guardar y deshacer.
-- Skills mínimos.
+| Fase | Estado | Entrega principal |
+|---|---|---|
+| V0 — núcleo seguro | ✅ | Bridge loopback con token, MCP y operaciones tipadas |
+| V1 — curvas | ✅ | Curvas editables, tubos y radios variables |
+| V2 — malla | ✅ | Topología, modifiers y materiales básicos |
+| V3 — conocimiento | ✅ | Skills, docs index y router |
+| V4 — evaluador | ✅ | Inspección, métricas y diff determinista |
+| V5 — visión | ✅ | Capturas GUI, informe visual y ciclo limitado |
+| V6 — Geometry Nodes | En curso | Recetas procedurales reutilizables |
+| V7 — producción | Pendiente | Sculpt, retopo, UV, materiales y validación de asset |
+| V8 — animación | Pendiente | Rigging, shape keys, constraints y keyframes |
+| V9 — orquestación | Pendiente | Planner, estado, reviewer y recetas revisadas |
 
-## V1 — herramientas de modelado
-
-- Curvas Bézier y NURBS.
-- Tubos con bevel y radios variables.
-- Modificadores tipados.
-- Bridge edge loops, boolean y voxel remesh.
-- Materiales básicos.
-- Tests de integración con Blender.
-
-## V2 — conocimiento recuperable
-
-- Índice local de Blender Python API.
-- Catálogo de skills por dominio.
-- Router que entrega al agente solo las herramientas y skills relevantes.
-
-## V3 — evaluación
-
-- Capturas multivista.
-- Métricas de continuidad, grosor y autointersección.
-- Comparación entre estado anterior y posterior.
-- Bucle automático: ejecutar → medir → corregir.
-
-## V4 — producción 3D
-
-- Geometry Nodes.
-- Sculpt y retopología.
-- Rigging, shape keys y animación.
-- Agentes especializados opcionales.
+Cada fase debe seguir: rama → implementación → pruebas unitarias → Blender background → GUI cuando aplique → MCP E2E → PR → revisión → merge → tag.
