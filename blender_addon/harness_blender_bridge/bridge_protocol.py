@@ -22,6 +22,7 @@ ALLOWED_OPERATIONS = {
     "evaluate_mesh",
     "evaluate_asset_readiness",
     "inspect_rigging_structure",
+    "inspect_movable_structure", "prepare_movable_structure", "list_movable_parts", "get_part_state", "reset_structure",
     "evaluate_spatial",
     "evaluate_tubular",
     "evaluate_penetration",
@@ -213,7 +214,7 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         _reject_unknown_keys(params, {"object_name"}, where="inspect_geometry_node_tree parameter")
         return {"object_name": _name(params.get("object_name"), "object_name")}
 
-    if operation in {"inspect_object", "delete_object", "validate_mesh", "inspect_mesh_detailed", "inspect_uv", "evaluate_uv_layout", "evaluate_mesh", "evaluate_asset_readiness", "inspect_rigging_structure"}:
+    if operation in {"inspect_object", "delete_object", "validate_mesh", "inspect_mesh_detailed", "inspect_uv", "evaluate_uv_layout", "evaluate_mesh", "evaluate_asset_readiness", "inspect_rigging_structure", "inspect_movable_structure", "list_movable_parts", "reset_structure"}:
         _reject_unknown_keys(params, {"object_name"}, where=f"{operation} parameter")
         if "object_name" not in params:
             raise ProtocolError(f"{operation} requires object_name")
@@ -280,6 +281,18 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         if "object_name" not in params:
             raise ProtocolError("inspect_curve requires object_name")
         return {"object_name": _name(params["object_name"], "object_name")}
+
+    if operation == "prepare_movable_structure":
+        _reject_unknown_keys(params, {"object_name", "mode"}, where="prepare_movable_structure parameter")
+        if "object_name" not in params: raise ProtocolError("prepare_movable_structure requires object_name")
+        mode = params.get("mode")
+        if mode is not None and mode not in {"curve_guided", "mesh_guided"}: raise ProtocolError("mode must be curve_guided or mesh_guided")
+        return {"object_name": _name(params["object_name"], "object_name"), "mode": mode}
+
+    if operation == "get_part_state":
+        _reject_unknown_keys(params, {"object_name", "part_name"}, where="get_part_state parameter")
+        if set(params) != {"object_name", "part_name"}: raise ProtocolError("get_part_state requires object_name and part_name")
+        return {"object_name": _name(params["object_name"], "object_name"), "part_name": _name(params["part_name"], "part_name")}
 
     if operation == "unwrap_uv":
         allowed = {"object_name", "method", "margin"}

@@ -174,6 +174,13 @@ def test_asset_readiness_is_typed_and_rejects_extra_fields():
 def test_rigging_structure_inspection_is_typed_and_read_only():
     assert bridge_protocol.parse_operation_request(request("inspect_rigging_structure", {"object_name": "Mesh"}), TOKEN) == ("inspect_rigging_structure", {"object_name": "Mesh"})
 
+def test_movable_structure_contract_is_typed_and_bounded():
+    operation, params = bridge_protocol.parse_operation_request(request("prepare_movable_structure", {"object_name": "Branch", "mode": "curve_guided"}), TOKEN)
+    assert operation == "prepare_movable_structure" and params["mode"] == "curve_guided"
+    assert bridge_protocol.parse_operation_request(request("get_part_state", {"object_name": "Branch", "part_name": "Process_01"}), TOKEN)[1]["part_name"] == "Process_01"
+    with pytest.raises(bridge_protocol.ProtocolError, match="curve_guided or mesh_guided"):
+        bridge_protocol.parse_operation_request(request("prepare_movable_structure", {"object_name": "Branch", "mode": "automatic"}), TOKEN)
+
 
 def test_uv_inspection_is_typed_and_read_only():
     operation, params = bridge_protocol.parse_operation_request(

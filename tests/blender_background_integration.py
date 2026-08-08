@@ -168,6 +168,16 @@ def main() -> None:
     tubular = dispatch_operation("evaluate_tubular", {"object_name": "V1_Background_Curve", "spline_index": 0})
     assert tubular["point_count"] == 4
     assert tubular["maximum_thickness"] >= tubular["minimum_thickness"]
+    movable_before = dispatch_operation("inspect_movable_structure", {"object_name": "V1_Background_Curve"})
+    assert movable_before["prepared"] is False
+    movable = dispatch_operation("prepare_movable_structure", {"object_name": "V1_Background_Curve", "mode": "curve_guided"})
+    assert movable["prepared"] is True and movable["parts"][1]["name"] == "Process_01"
+    assert dispatch_operation("list_movable_parts", {"object_name": "V1_Background_Curve"})["prepared"] is True
+    assert dispatch_operation("get_part_state", {"object_name": "V1_Background_Curve", "part_name": "Process_01"})["part"]["state"] == "neutral"
+    assert dispatch_operation("reset_structure", {"object_name": "V1_Background_Curve"})["reset"] is True
+    dispatch_operation("undo", {})
+    dispatch_operation("undo", {})
+    assert dispatch_operation("inspect_movable_structure", {"object_name": "V1_Background_Curve"})["prepared"] is False
 
     bpy.ops.mesh.primitive_cube_add()
     merge_mesh = bpy.context.object

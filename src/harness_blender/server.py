@@ -273,6 +273,31 @@ def inspect_rigging_structure(object_name: str) -> str:
     """Inspect rig-related mesh or armature structure without editing Blender."""
     return _run("inspect_rigging_structure", {"object_name": object_name})
 
+@mcp.tool()
+def inspect_movable_structure(object_name: str) -> str:
+    """Inspect a mesh or curve as a possible movable structure without changing it."""
+    return _run("inspect_movable_structure", {"object_name": object_name})
+
+@mcp.tool()
+def prepare_movable_structure(object_name: str, mode: str | None = None) -> str:
+    """Register simple, reversible parts for a named mesh or curve; no geometry changes."""
+    return _run("prepare_movable_structure", {"object_name": object_name, "mode": mode})
+
+@mcp.tool()
+def list_movable_parts(object_name: str) -> str:
+    """List user-facing parts registered for a movable structure."""
+    return _run("list_movable_parts", {"object_name": object_name})
+
+@mcp.tool()
+def get_part_state(object_name: str, part_name: str) -> str:
+    """Read the state of one named movable part."""
+    return _run("get_part_state", {"object_name": object_name, "part_name": part_name})
+
+@mcp.tool()
+def reset_structure(object_name: str) -> str:
+    """Restore registered movable parts to neutral state; can be undone."""
+    return _run("reset_structure", {"object_name": object_name})
+
 
 @mcp.tool()
 def evaluate_spatial(object_name: str, target_object_name: str) -> str:

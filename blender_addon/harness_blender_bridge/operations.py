@@ -37,6 +37,7 @@ from . import curve_operations
 from . import mesh_operations
 from . import evaluator_operations
 from . import geometry_nodes_operations
+from . import movable_structure_operations
 
 
 def _object(name: str) -> bpy.types.Object:
@@ -422,6 +423,16 @@ def _op_inspect_active_selection(_params: dict[str, Any]) -> dict[str, Any]:
     active = bpy.context.view_layer.objects.active
     return {"active_object": active.name if active else None, "active_type": active.type if active else None, "selected_objects": [obj.name for obj in bpy.context.selected_objects]}
 
+def _op_prepare_movable_structure(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous = movable_structure_operations.prepare(params)
+    _record_undo("prepare movable structure", lambda: movable_structure_operations.restore_metadata(params["object_name"], previous))
+    return result
+
+def _op_reset_structure(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous = movable_structure_operations.reset(params)
+    _record_undo("reset movable structure", lambda: movable_structure_operations.restore_metadata(params["object_name"], previous))
+    return result
+
 
 Operation = Callable[[dict[str, Any]], dict[str, Any]]
 OPERATIONS: dict[str, Operation] = {
@@ -432,6 +443,9 @@ OPERATIONS: dict[str, Operation] = {
     "evaluate_mesh": evaluator_operations.evaluate_mesh,
     "evaluate_asset_readiness": evaluator_operations.evaluate_asset_readiness,
     "inspect_rigging_structure": evaluator_operations.inspect_rigging_structure,
+    "inspect_movable_structure": movable_structure_operations.inspect, "prepare_movable_structure": _op_prepare_movable_structure,
+    "list_movable_parts": movable_structure_operations.list_parts, "get_part_state": movable_structure_operations.get_part_state,
+    "reset_structure": _op_reset_structure,
     "evaluate_spatial": evaluator_operations.evaluate_spatial,
     "evaluate_tubular": evaluator_operations.evaluate_tubular,
     "evaluate_penetration": evaluator_operations.evaluate_penetration,
