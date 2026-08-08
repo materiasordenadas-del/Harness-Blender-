@@ -207,6 +207,7 @@ def main() -> None:
     assert uv_report["has_uv"] is True
     assert uv_report["active_layer"] is not None
     assert uv_report["layers"][0]["loop_count"] == len(evaluated_mesh.data.loops)
+    assert dispatch_operation("evaluate_uv_layout", {"object_name": evaluated_mesh.name})["status"] == "ready"
     unwrapped = dispatch_operation("unwrap_uv", {"object_name": evaluated_mesh.name, "method": "ANGLE_BASED", "margin": 0.01})
     assert unwrapped["method"] == "ANGLE_BASED"
     assert unwrapped["uv"]["has_uv"] is True

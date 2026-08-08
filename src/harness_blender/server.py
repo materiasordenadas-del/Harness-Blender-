@@ -239,6 +239,12 @@ def inspect_uv(object_name: str) -> str:
 
 
 @mcp.tool()
+def evaluate_uv_layout(object_name: str) -> str:
+    """Check active UV bounds and degenerate UV faces without editing Blender."""
+    return _run("evaluate_uv_layout", {"object_name": object_name})
+
+
+@mcp.tool()
 def unwrap_uv(object_name: str, method: str = "ANGLE_BASED", margin: float = 0.001) -> str:
     """Unwrap a mesh UV map with a full in-memory snapshot for Harness undo."""
     return _run("unwrap_uv", {"object_name": object_name, "method": method, "margin": margin})

@@ -31,6 +31,7 @@ ALLOWED_OPERATIONS = {
     "validate_mesh",
     "inspect_mesh_detailed",
     "inspect_uv",
+    "evaluate_uv_layout",
     "unwrap_uv",
     "sculpt_smooth_region",
     "evaluate_mesh",
@@ -209,7 +210,7 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         _reject_unknown_keys(params, {"object_name"}, where="inspect_geometry_node_tree parameter")
         return {"object_name": _name(params.get("object_name"), "object_name")}
 
-    if operation in {"inspect_object", "delete_object", "validate_mesh", "inspect_mesh_detailed", "inspect_uv", "evaluate_mesh", "evaluate_asset_readiness"}:
+    if operation in {"inspect_object", "delete_object", "validate_mesh", "inspect_mesh_detailed", "inspect_uv", "evaluate_uv_layout", "evaluate_mesh", "evaluate_asset_readiness"}:
         _reject_unknown_keys(params, {"object_name"}, where=f"{operation} parameter")
         if "object_name" not in params:
             raise ProtocolError(f"{operation} requires object_name")
