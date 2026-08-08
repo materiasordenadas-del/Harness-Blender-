@@ -15,7 +15,14 @@ from .docs_index import initialize as initialize_docs, search as search_docs
 from .evaluator import diff_reports
 from .router import route
 from .skill_registry import content as skill_content, discover as discover_skills
+from .source_registry import load_sources
+from .scene_packet import enrich_task_packet
+from .task_packet import build_task_packet
+from .tool_catalog import list_candidates
+from .review_bundle import build_review_bundle, save_review_bundle
+from .benchmarks import run_benchmarks
 from .visual_review import next_visual_review_step as decide_next_visual_review_step, validate_visual_review
+from .visual_evidence import validate_visual_comparison
 
 mcp = FastMCP("Harness Blender V1")
 _connection = BlenderConnection()
@@ -44,6 +51,87 @@ def route_blender_task(task: str) -> str:
 
 
 @mcp.tool()
+def build_blender_task_packet(task: str) -> str:
+    """Return bounded skills, tools, checks and stop conditions for one task."""
+    return json.dumps(build_task_packet(task), ensure_ascii=False, indent=2)
+
+
+def _snapshot_scene(object_names: list[str] | None = None) -> dict[str, Any]:
+    if object_names is not None and (not isinstance(object_names, list) or not all(isinstance(name, str) and name for name in object_names)):
+        raise ValueError("object_names must be a list of non-empty strings")
+    scene = _connection.call("inspect_scene_detailed")
+    requested = set(object_names or [item["name"] for item in scene["objects"]])
+    known = {item["name"] for item in scene["objects"]}
+    missing = requested - known
+    if missing:
+        raise ValueError(f"Unknown Blender object(s): {', '.join(sorted(missing))}")
+    objects = []
+    for item in scene["objects"]:
+        if item["name"] not in requested:
+            continue
+        entry = {"name": item["name"], "type": item["type"], "metrics": {}}
+        if item["type"] == "MESH":
+            entry["metrics"] = _connection.call("evaluate_mesh", {"object_name": item["name"]})
+        elif item["type"] == "CURVE":
+            try:
+                entry["metrics"] = _connection.call("evaluate_tubular", {"object_name": item["name"], "spline_index": 0})
+            except RuntimeError as exc:
+                # Inspection remains useful even when a curve is not yet a valid tube.
+                entry["metrics_error"] = str(exc)
+        objects.append(entry)
+    return {"scene": scene["scene"], "objects": objects}
+
+
+@mcp.tool()
+def capture_scene_snapshot(object_names: list[str] | None = None) -> str:
+    """Capture scene/object metrics before or after typed Blender operations."""
+    return json.dumps(_snapshot_scene(object_names), ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def build_scene_task_packet(task: str, object_names: list[str] | None = None) -> str:
+    """Build a Task Packet using live Blender object types and V4 metrics."""
+    return json.dumps(enrich_task_packet(build_task_packet(task), _snapshot_scene(object_names)), ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def build_review_bundle_from_snapshots(
+    before: dict[str, Any], after: dict[str, Any], operations: list[str], visual_review: dict[str, Any] | None = None,
+    visual_comparison: dict[str, Any] | None = None,
+    visual_required: bool = False,
+) -> str:
+    """Compare real snapshots and return PASS, NEEDS_IMPROVEMENT, FAIL or NEEDS_REVIEW."""
+    return json.dumps(build_review_bundle(before, after, operations, visual_review, visual_comparison, visual_required=visual_required), ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def save_review_bundle_to_evidence(bundle: dict[str, Any], evidence_id: str) -> str:
+    """Save one immutable evidence bundle under HARNESS_EVIDENCE_DIR."""
+    return json.dumps({"filepath": str(save_review_bundle(bundle, evidence_id))}, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def list_harness_sources() -> str:
+    """List curated, versioned research sources without contacting the network."""
+    return json.dumps(list(load_sources().values()), ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def list_tool_candidates(status: str | None = None) -> str:
+    """List research candidates only; this does not expose or execute new Blender tools."""
+    candidates = list_candidates()
+    if status is not None:
+        candidates = [item for item in candidates if item["status"] == status]
+    return json.dumps(candidates, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def run_harness_benchmarks() -> str:
+    """Run deterministic routing benchmarks; this never connects to Blender."""
+    return json.dumps(run_benchmarks(), ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
 def diff_evaluation_reports(before: dict[str, Any], after: dict[str, Any]) -> str:
     """Compare two V4 read-only evaluation reports without contacting Blender."""
     return json.dumps(diff_reports(before, after), ensure_ascii=False, indent=2)
@@ -53,6 +141,24 @@ def diff_evaluation_reports(before: dict[str, Any], after: dict[str, Any]) -> st
 def validate_visual_review_report(review: dict[str, Any]) -> str:
     """Validate a structured observation made from controlled views; it never edits Blender."""
     return json.dumps(validate_visual_review(review), ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def build_visual_review_capture_plan(focus_object: str) -> str:
+    """Return the three required single-image captures in their fixed comparison order."""
+    if not isinstance(focus_object, str) or not focus_object.strip() or len(focus_object) > 255:
+        raise ValueError("focus_object must contain 1-255 characters")
+    return json.dumps({
+        "focus_object": focus_object.strip(),
+        "views": ["front", "right", "perspective"],
+        "instruction": "Call capture_controlled_view once for each view, in this order, before visual comparison.",
+    }, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def validate_visual_comparison_report(comparison: dict[str, Any]) -> str:
+    """Validate reference/result comparison metadata without judging or editing images."""
+    return json.dumps(validate_visual_comparison(comparison), ensure_ascii=False, indent=2)
 
 
 @mcp.tool()
@@ -67,7 +173,7 @@ def list_blender_skills(domain: str | None = None) -> str:
     skills = discover_skills()
     if domain:
         skills = [skill for skill in skills if skill.domain == domain]
-    return json.dumps([{"name": skill.name, "domain": skill.domain, "applies_to": skill.applies_to, "tools": skill.tools} for skill in skills], ensure_ascii=False, indent=2)
+    return json.dumps([{"name": skill.name, "domain": skill.domain, "applies_to": skill.applies_to, "tools": skill.tools, "sources": skill.sources} for skill in skills], ensure_ascii=False, indent=2)
 
 
 @mcp.tool()
@@ -127,9 +233,39 @@ def inspect_mesh_detailed(object_name: str) -> str:
 
 
 @mcp.tool()
+def inspect_uv(object_name: str) -> str:
+    """Read UV-layer names, active layer, coordinate counts and bounds without editing."""
+    return _run("inspect_uv", {"object_name": object_name})
+
+
+@mcp.tool()
+def evaluate_uv_layout(object_name: str) -> str:
+    """Check active UV bounds and degenerate UV faces without editing Blender."""
+    return _run("evaluate_uv_layout", {"object_name": object_name})
+
+
+@mcp.tool()
+def unwrap_uv(object_name: str, method: str = "ANGLE_BASED", margin: float = 0.001) -> str:
+    """Unwrap a mesh UV map with a full in-memory snapshot for Harness undo."""
+    return _run("unwrap_uv", {"object_name": object_name, "method": method, "margin": margin})
+
+
+@mcp.tool()
+def sculpt_smooth_region(object_name: str, vertex_indices: list[int], factor: float = 0.5, iterations: int = 1) -> str:
+    """Smooth only named mesh vertices with an in-memory topology snapshot for undo."""
+    return _run("sculpt_smooth_region", {"object_name": object_name, "vertex_indices": vertex_indices, "factor": factor, "iterations": iterations})
+
+
+@mcp.tool()
 def evaluate_mesh(object_name: str) -> str:
     """Measure mesh topology, area, volume and world bounding box without editing it."""
     return _run("evaluate_mesh", {"object_name": object_name})
+
+
+@mcp.tool()
+def evaluate_asset_readiness(object_name: str) -> str:
+    """Check a mesh for V7 production readiness without changing Blender."""
+    return _run("evaluate_asset_readiness", {"object_name": object_name})
 
 
 @mcp.tool()
@@ -244,6 +380,24 @@ def merge_vertices(object_name: str, vertex_indices: list[int]) -> str:
 def bridge_edge_loops(object_name: str, edge_indices: list[int]) -> str:
     """Bridge two compatible boundary loops selected by their edge indices."""
     return _run("bridge_edge_loops", {"object_name": object_name, "edge_indices": edge_indices})
+
+
+@mcp.tool()
+def split_mesh_by_plane(object_name: str, plane_point: list[float], plane_normal: list[float], positive_name: str, negative_name: str, cap: bool = True) -> str:
+    """Create two capped mesh outputs; retain the source hidden for reversible recovery."""
+    return _run("split_mesh_by_plane", {"object_name": object_name, "plane_point": plane_point, "plane_normal": plane_normal, "positive_name": positive_name, "negative_name": negative_name, "cap": cap})
+
+
+@mcp.tool()
+def inspect_active_selection() -> str:
+    """Return Blender's active selected object so the user need not type its name."""
+    return _run("inspect_active_selection")
+
+
+@mcp.tool()
+def split_selected_mesh_by_view_line(line_start: list[float], line_end: list[float], positive_name: str, negative_name: str, cap: bool = True) -> str:
+    """Turn a normalized visible viewport line into a reversible cut of the active mesh."""
+    return _run("split_selected_mesh_by_view_line", {"line_start": line_start, "line_end": line_end, "positive_name": positive_name, "negative_name": negative_name, "cap": cap})
 
 
 @mcp.tool()
@@ -495,6 +649,18 @@ def create_procedural_tube_setup(
 
 
 @mcp.tool()
+def create_surface_scatter_setup(surface_object_name: str, instance_object_name: str, group_name: str, density: float) -> str:
+    """Attach a reversible Geometry Nodes scatter recipe to a mesh surface."""
+    return _run("create_surface_scatter_setup", {"surface_object_name": surface_object_name, "instance_object_name": instance_object_name, "group_name": group_name, "density": density})
+
+
+@mcp.tool()
+def create_procedural_branching_setup(main_curve_name: str, branch_curve_names: list[str], group_name: str, profile_radius: float, resample_length: float) -> str:
+    """Attach a reversible procedural branching tube recipe to editable curves."""
+    return _run("create_procedural_branching_setup", {"main_curve_name": main_curve_name, "branch_curve_names": branch_curve_names, "group_name": group_name, "profile_radius": profile_radius, "resample_length": resample_length})
+
+
+@mcp.tool()
 def inspect_geometry_node_tree(object_name: str) -> str:
     """Inspect the Geometry Nodes group attached to one object."""
     return _run("inspect_geometry_node_tree", {"object_name": object_name})
@@ -626,6 +792,20 @@ def v6_capabilities() -> str:
         "inputs": {"profile_radius": "0.001-1000", "resample_length": "0.001-1000"},
         "reversible": True,
         "not_yet_available": ["scatter", "instances", "procedural branching"],
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+@mcp.resource("harness://v7/capabilities")
+def v7_capabilities() -> str:
+    """Describe the first read-only V7 asset-production check."""
+    payload = {
+        "version": "0.8.0-v7-production",
+        "read_only": True,
+        "tools": ["evaluate_asset_readiness", "inspect_uv", "unwrap_uv"],
+        "status": ["ready", "needs_review", "blocked"],
+        "checks": ["mesh health", "transform", "collections", "materials", "UV layer metadata"],
+        "not_yet_available": ["sculpt", "retopology", "UV overlap analysis"],
     }
     return json.dumps(payload, ensure_ascii=False, indent=2)
 

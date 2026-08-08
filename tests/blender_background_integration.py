@@ -199,6 +199,36 @@ def main() -> None:
     assert_close([mesh_report["surface_area"], mesh_report["volume"]], [24.0, 8.0])
     assert mesh_report["self_intersections"] == 0
     assert mesh_report["inconsistent_normal_edges"] == 0
+    asset_readiness = dispatch_operation("evaluate_asset_readiness", {"object_name": evaluated_mesh.name})
+    assert asset_readiness["status"] == "needs_review"
+    assert asset_readiness["blockers"] == []
+    assert "materials" in asset_readiness["needs_review"]
+    uv_report = dispatch_operation("inspect_uv", {"object_name": evaluated_mesh.name})
+    assert uv_report["has_uv"] is True
+    assert uv_report["active_layer"] is not None
+    assert uv_report["layers"][0]["loop_count"] == len(evaluated_mesh.data.loops)
+    assert dispatch_operation("evaluate_uv_layout", {"object_name": evaluated_mesh.name})["status"] == "ready"
+    active_uv = evaluated_mesh.data.uv_layers.active
+    second_polygon = evaluated_mesh.data.polygons[1]
+    first_polygon = evaluated_mesh.data.polygons[0]
+    saved_second_uv = [tuple(active_uv.data[index].uv) for index in second_polygon.loop_indices]
+    for target, source in zip(second_polygon.loop_indices, first_polygon.loop_indices):
+        active_uv.data[target].uv = active_uv.data[source].uv
+    overlap_report = dispatch_operation("evaluate_uv_layout", {"object_name": evaluated_mesh.name})
+    assert overlap_report["overlapping_triangle_pairs"] > 0
+    assert "overlapping_uv_triangles" in overlap_report["issues"]
+    for index, coordinate in zip(second_polygon.loop_indices, saved_second_uv):
+        active_uv.data[index].uv = coordinate
+    unwrapped = dispatch_operation("unwrap_uv", {"object_name": evaluated_mesh.name, "method": "ANGLE_BASED", "margin": 0.01})
+    assert unwrapped["method"] == "ANGLE_BASED"
+    assert unwrapped["uv"]["has_uv"] is True
+    dispatch_operation("undo", {})
+    assert dispatch_operation("inspect_uv", {"object_name": evaluated_mesh.name}) == uv_report
+    before_sculpt = [tuple(vertex.co) for vertex in evaluated_mesh.data.vertices]
+    sculpted = dispatch_operation("sculpt_smooth_region", {"object_name": evaluated_mesh.name, "vertex_indices": [0, 1], "factor": 0.4, "iterations": 1})
+    assert sculpted["vertex_indices"] == [0, 1]
+    dispatch_operation("undo", {})
+    assert [tuple(vertex.co) for vertex in evaluated_mesh.data.vertices] == before_sculpt
 
     bpy.ops.mesh.primitive_cube_add(size=2, location=(4, 0, 0))
     target_mesh = bpy.context.object
@@ -227,6 +257,45 @@ def main() -> None:
     bpy.data.meshes.remove(generated_mesh)
     dispatch_operation("undo", {})
     assert not any(item.type == "NODES" for item in bpy.data.objects["V1_Background_Curve"].modifiers)
+
+    bpy.ops.mesh.primitive_plane_add(size=4)
+    scatter_surface = bpy.context.object
+    scatter_surface.name = "V6_Scatter_Surface"
+    bpy.ops.mesh.primitive_ico_sphere_add(radius=0.1, location=(0, 0, 2))
+    scatter_instance = bpy.context.object
+    scatter_instance.name = "V6_Scatter_Instance"
+    scatter = dispatch_operation("create_surface_scatter_setup", {"surface_object_name": scatter_surface.name, "instance_object_name": scatter_instance.name, "group_name": "V6_Background_Scatter", "density": 2.0})
+    assert scatter["group_name"] == "V6_Background_Scatter"
+    scatter_tree = dispatch_operation("inspect_geometry_node_tree", {"object_name": scatter_surface.name})
+    assert {node["name"] for node in scatter_tree["nodes"]} >= {"Surface Input", "Distribute Points on Faces", "Instance Object", "Instance on Points", "Join Surface and Instances", "Geometry Output"}
+    dispatch_operation("undo", {})
+    assert not any(item.type == "NODES" for item in scatter_surface.modifiers)
+
+    branch_main = dispatch_operation("create_curve", {"name": "V6_Branch_Main", "spline_type": "POLY", "points": [[0, 0, 0], [0, 0, 2]]})
+    assert branch_main["name"] == "V6_Branch_Main"
+    branch_one = dispatch_operation("create_curve", {"name": "V6_Branch_One", "spline_type": "POLY", "points": [[0, 0, 1], [1, 0, 2]]})
+    branch_two = dispatch_operation("create_curve", {"name": "V6_Branch_Two", "spline_type": "POLY", "points": [[0, 0, 1], [-1, 0, 2]]})
+    assert branch_one["name"] == "V6_Branch_One" and branch_two["name"] == "V6_Branch_Two"
+    branching = dispatch_operation("create_procedural_branching_setup", {"main_curve_name": "V6_Branch_Main", "branch_curve_names": ["V6_Branch_One", "V6_Branch_Two"], "group_name": "V6_Background_Branching", "profile_radius": 0.1, "resample_length": 0.2})
+    assert branching["group_name"] == "V6_Background_Branching"
+    branching_tree = dispatch_operation("inspect_geometry_node_tree", {"object_name": "V6_Branch_Main"})
+    assert {node["name"] for node in branching_tree["nodes"]} >= {"Main Curve Input", "Join Branch Curves", "Resample Branching", "Profile Circle", "Branching Curve to Mesh", "Geometry Output"}
+    dispatch_operation("undo", {})
+    assert not any(item.type == "NODES" for item in bpy.data.objects["V6_Branch_Main"].modifiers)
+
+    bpy.ops.mesh.primitive_cube_add(size=2)
+    split_source = bpy.context.object
+    split_source.name = "V2_Split_Source"
+    split = dispatch_operation("split_mesh_by_plane", {"object_name": split_source.name, "plane_point": [0, 0, 0], "plane_normal": [1, 0, 0], "positive_name": "V2_Split_Positive", "negative_name": "V2_Split_Negative", "cap": True})
+    assert split["source_hidden"] is True
+    assert split_source.hide_get() is True
+    for name in ("V2_Split_Positive", "V2_Split_Negative"):
+        report = dispatch_operation("evaluate_mesh", {"object_name": name})
+        assert report["is_closed_manifold"] is True
+    dispatch_operation("undo", {})
+    assert bpy.data.objects.get("V2_Split_Positive") is None
+    assert bpy.data.objects.get("V2_Split_Negative") is None
+    assert split_source.hide_get() is False
 
     print("HARNESS_BLENDER_BACKGROUND_INTEGRATION_OK")
 

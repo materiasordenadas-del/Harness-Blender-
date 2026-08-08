@@ -389,12 +389,48 @@ def _op_create_procedural_tube_setup(params: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _op_create_surface_scatter_setup(params: dict[str, Any]) -> dict[str, Any]:
+    result = geometry_nodes_operations.create_surface_scatter_setup(params)
+    surface_name, modifier_name, group_name = result["surface_object_name"], result["modifier_name"], result["group_name"]
+
+    def restore() -> None:
+        surface = bpy.data.objects.get(surface_name)
+        modifier = surface.modifiers.get(modifier_name) if surface else None
+        if modifier is not None:
+            surface.modifiers.remove(modifier)
+        group = bpy.data.node_groups.get(group_name)
+        if group is not None and group.users == 0:
+            bpy.data.node_groups.remove(group)
+        bpy.context.view_layer.update()
+
+    _record_undo(f"create Geometry Nodes scatter {group_name}", restore)
+    return result
+
+
+def _op_create_procedural_branching_setup(params: dict[str, Any]) -> dict[str, Any]:
+    result = geometry_nodes_operations.create_procedural_branching_setup(params)
+    def restore() -> None:
+        obj=bpy.data.objects.get(result["main_curve_name"]); mod=obj.modifiers.get(result["modifier_name"]) if obj else None
+        if mod: obj.modifiers.remove(mod)
+        group=bpy.data.node_groups.get(result["group_name"])
+        if group and group.users == 0: bpy.data.node_groups.remove(group)
+    _record_undo(f"create Geometry Nodes branching {result['group_name']}", restore)
+    return result
+
+
+def _op_inspect_active_selection(_params: dict[str, Any]) -> dict[str, Any]:
+    active = bpy.context.view_layer.objects.active
+    return {"active_object": active.name if active else None, "active_type": active.type if active else None, "selected_objects": [obj.name for obj in bpy.context.selected_objects]}
+
+
 Operation = Callable[[dict[str, Any]], dict[str, Any]]
 OPERATIONS: dict[str, Operation] = {
     "ping": _op_ping,
     "inspect_scene": _op_inspect_scene,
     "inspect_scene_detailed": evaluator_operations.inspect_scene_detailed,
+    "inspect_active_selection": _op_inspect_active_selection,
     "evaluate_mesh": evaluator_operations.evaluate_mesh,
+    "evaluate_asset_readiness": evaluator_operations.evaluate_asset_readiness,
     "evaluate_spatial": evaluator_operations.evaluate_spatial,
     "evaluate_tubular": evaluator_operations.evaluate_tubular,
     "evaluate_penetration": evaluator_operations.evaluate_penetration,
@@ -404,6 +440,10 @@ OPERATIONS: dict[str, Operation] = {
     "delete_object": _op_delete_object,
     "validate_mesh": _op_validate_mesh,
     "inspect_mesh_detailed": mesh_operations.inspect_mesh_detailed,
+    "inspect_uv": mesh_operations.inspect_uv,
+    "evaluate_uv_layout": mesh_operations.evaluate_uv_layout,
+    "unwrap_uv": mesh_operations.unwrap_uv,
+    "sculpt_smooth_region": mesh_operations.sculpt_smooth_region,
     "recalculate_normals": mesh_operations.recalculate_normals,
     "flip_normals": mesh_operations.flip_normals,
     "subdivide_mesh": mesh_operations.subdivide_mesh,
@@ -420,6 +460,8 @@ OPERATIONS: dict[str, Operation] = {
     "apply_modifier": mesh_operations.apply_modifier,
     "merge_vertices": mesh_operations.merge_vertices,
     "bridge_edge_loops": mesh_operations.bridge_edge_loops,
+    "split_mesh_by_plane": mesh_operations.split_mesh_by_plane,
+    "split_selected_mesh_by_view_line": mesh_operations.split_selected_mesh_by_view_line,
     "fill_hole": mesh_operations.fill_hole,
     "boolean_union": lambda params: mesh_operations.boolean_operation(params, "UNION"),
     "boolean_difference": lambda params: mesh_operations.boolean_operation(params, "DIFFERENCE"),
@@ -431,6 +473,8 @@ OPERATIONS: dict[str, Operation] = {
     "capture_screen": _op_capture_screen,
     "capture_controlled_view": _op_capture_controlled_view,
     "create_procedural_tube_setup": _op_create_procedural_tube_setup,
+    "create_surface_scatter_setup": _op_create_surface_scatter_setup,
+    "create_procedural_branching_setup": _op_create_procedural_branching_setup,
     "inspect_geometry_node_tree": geometry_nodes_operations.inspect_geometry_node_tree,
     "create_curve": curve_operations.create_curve,
     "inspect_curve": curve_operations.inspect_curve,

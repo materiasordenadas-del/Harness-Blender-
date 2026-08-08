@@ -10,8 +10,8 @@ Las fuentes que orientan cada fase están en [SOURCE_MAP.md](SOURCE_MAP.md) y en
 | V3 — conocimiento | ✅ | Skills, docs index y router |
 | V4 — evaluador | ✅ | Inspección, métricas y diff determinista |
 | V5 — visión | ✅ | Capturas GUI, informe visual y ciclo limitado |
-| V6 — Geometry Nodes | En curso | Recetas procedurales reutilizables |
-| V7 — producción | Pendiente | Sculpt, retopo, UV, materiales y validación de asset |
+| V6 — Geometry Nodes | ✅ | Tubos, scatter y ramificación procedurales reversibles |
+| V7 — producción | ✅ | Sculpt localizado, retopo recuperable, UV recuperable, materiales Principled y validación de asset |
 | V8 — animación | Pendiente | Rigging, shape keys, constraints y keyframes |
 | V9 — orquestación | Pendiente | Planner, estado, reviewer y recetas revisadas |
 
