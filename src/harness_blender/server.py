@@ -334,9 +334,9 @@ def prepare_selected_mesh_extension(object_name: str, part_name: str) -> str:
     return _run("prepare_selected_mesh_extension", {"object_name": object_name, "part_name": part_name})
 
 @mcp.tool()
-def bend_mesh_part(object_name: str, angle_degrees: float) -> str:
-    """Bend a temporary V8.2 mesh copy while keeping its selected base vertices fixed."""
-    return _run("bend_mesh_part", {"object_name": object_name, "angle_degrees": angle_degrees})
+def bend_mesh_part(object_name: str, angle_degrees: float, bend_axis: str = "x") -> str:
+    """Bend a temporary V8.2 mesh copy on its local x or z plane while keeping its selected base vertices fixed."""
+    return _run("bend_mesh_part", {"object_name": object_name, "angle_degrees": angle_degrees, "bend_axis": bend_axis})
 
 @mcp.tool()
 def reset_mesh_part(object_name: str) -> str:

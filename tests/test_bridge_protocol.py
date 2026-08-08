@@ -196,6 +196,11 @@ def test_mesh_extension_contract_requires_explicit_bounded_selection():
             "object_name": "Torso", "part_name": "Process_01", "vertex_indices": [1, 1], "base_vertex_indices": [1],
         }), TOKEN)
 
+def test_mesh_bend_accepts_only_a_local_bend_plane():
+    assert bridge_protocol.parse_operation_request(request("bend_mesh_part", {"object_name": "Copy", "angle_degrees": 25, "bend_axis": "z"}), TOKEN)[1]["bend_axis"] == "z"
+    with pytest.raises(bridge_protocol.ProtocolError, match="bend_axis must be x or z"):
+        bridge_protocol.parse_operation_request(request("bend_mesh_part", {"object_name": "Copy", "angle_degrees": 25, "bend_axis": "y"}), TOKEN)
+
 
 def test_uv_inspection_is_typed_and_read_only():
     operation, params = bridge_protocol.parse_operation_request(

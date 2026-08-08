@@ -221,8 +221,9 @@ def main() -> None:
     assert [list(vertex.co) for vertex in v8_source.data.vertices] == source_coordinates
     copy_base = evaluated_coordinate(v8_copy, 1)
     copy_tip = evaluated_coordinate(v8_copy, 3)
-    bent_mesh = dispatch_operation("bend_mesh_part", {"object_name": v8_copy.name, "angle_degrees": 45})
+    bent_mesh = dispatch_operation("bend_mesh_part", {"object_name": v8_copy.name, "angle_degrees": 45, "bend_axis": "x"})
     assert bent_mesh["base_protected"] is True and bent_mesh["source_unchanged"] is True
+    assert bent_mesh["bend_axis"] == "x"
     assert bent_mesh["maximum_edge_stretch"] <= 1.5
     assert_close(evaluated_coordinate(v8_copy, 1), copy_base)
     assert evaluated_coordinate(v8_copy, 3) != copy_tip

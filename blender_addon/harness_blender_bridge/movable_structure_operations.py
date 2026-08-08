@@ -314,7 +314,7 @@ def _evaluated_edge_lengths(obj: bpy.types.Object) -> list[float]:
     try: return _edge_lengths(mesh)
     finally: evaluated.to_mesh_clear()
 
-def bend_mesh_part(params: dict[str, Any]) -> tuple[dict[str, Any], float]:
+def bend_mesh_part(params: dict[str, Any]) -> tuple[dict[str, Any], list[float]]:
     copy = _object(params["object_name"])
     if copy.type != "MESH": raise TypeError("bend_mesh_part requires a prepared MESH copy")
     if abs(params["angle_degrees"]) > _MAX_SAFE_MESH_BEND_DEGREES:
@@ -326,17 +326,20 @@ def bend_mesh_part(params: dict[str, Any]) -> tuple[dict[str, Any], float]:
     if armature is None or armature.type != "ARMATURE": raise ValueError("prepared mesh copy has no internal armature")
     pose_bone = armature.pose.bones.get(part.get("segment_bone"))
     if pose_bone is None: raise ValueError("prepared mesh copy has no segment control")
-    previous = float(pose_bone.rotation_euler.y)
+    previous = [float(value) for value in pose_bone.rotation_euler]
     edge_lengths = _edge_lengths(copy.data)
-    pose_bone.rotation_mode = "XYZ"; pose_bone.rotation_euler.y = math.radians(params["angle_degrees"])
+    bend_axis = params.get("bend_axis", "x")
+    if bend_axis not in {"x", "z"}: raise ValueError("bend_axis must be x or z")
+    axis_index = {"x": 0, "z": 2}[bend_axis]
+    pose_bone.rotation_mode = "XYZ"; pose_bone.rotation_euler[axis_index] = math.radians(params["angle_degrees"])
     bpy.context.view_layer.update()
     stretch = _maximum_edge_stretch(edge_lengths, _evaluated_edge_lengths(copy))
     if stretch > _MAX_SAFE_EDGE_STRETCH:
         restore_mesh_part(copy.name, previous)
         raise ValueError(f"blocked: bend would stretch an edge {stretch:.2f}x (limit {_MAX_SAFE_EDGE_STRETCH:.2f}x)")
-    return {"object": copy.name, "source_object": source.name, "part": part["name"], "angle_degrees": params["angle_degrees"], "base_protected": True, "source_unchanged": True, "maximum_edge_stretch": stretch}, previous
+    return {"object": copy.name, "source_object": source.name, "part": part["name"], "angle_degrees": params["angle_degrees"], "bend_axis": bend_axis, "base_protected": True, "source_unchanged": True, "maximum_edge_stretch": stretch}, previous
 
-def restore_mesh_part(object_name: str, previous: float) -> None:
+def restore_mesh_part(object_name: str, previous: list[float]) -> None:
     copy = bpy.data.objects.get(object_name)
     if copy is None or copy.type != "MESH": return
     part = _mesh_part(copy)
@@ -344,10 +347,10 @@ def restore_mesh_part(object_name: str, previous: float) -> None:
     if armature is None: return
     pose_bone = armature.pose.bones.get(part.get("segment_bone"))
     if pose_bone is None: return
-    pose_bone.rotation_mode = "XYZ"; pose_bone.rotation_euler.y = previous
+    pose_bone.rotation_mode = "XYZ"; pose_bone.rotation_euler = previous
     bpy.context.view_layer.update()
 
-def reset_mesh_part(params: dict[str, Any]) -> tuple[dict[str, Any], float]:
+def reset_mesh_part(params: dict[str, Any]) -> tuple[dict[str, Any], list[float]]:
     copy = _object(params["object_name"])
     if copy.type != "MESH": raise TypeError("reset_mesh_part requires a prepared MESH copy")
     part = _mesh_part(copy); source_name = copy.get(_MESH_SOURCE_KEY)
@@ -357,8 +360,8 @@ def reset_mesh_part(params: dict[str, Any]) -> tuple[dict[str, Any], float]:
     if armature is None: raise ValueError("prepared mesh copy has no internal armature")
     pose_bone = armature.pose.bones.get(part.get("segment_bone"))
     if pose_bone is None: raise ValueError("prepared mesh copy has no segment control")
-    previous = float(pose_bone.rotation_euler.y)
-    pose_bone.rotation_mode = "XYZ"; pose_bone.rotation_euler.y = 0.0
+    previous = [float(value) for value in pose_bone.rotation_euler]
+    pose_bone.rotation_mode = "XYZ"; pose_bone.rotation_euler = [0.0, 0.0, 0.0]
     bpy.context.view_layer.update()
     return {"object": copy.name, "source_object": source.name, "part": part["name"], "reset": True, "base_protected": True, "source_unchanged": True}, previous
 

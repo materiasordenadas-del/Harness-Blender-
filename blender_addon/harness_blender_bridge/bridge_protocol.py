@@ -341,9 +341,11 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         return {"object_name": _name(params["object_name"], "object_name")}
 
     if operation == "bend_mesh_part":
-        _reject_unknown_keys(params, {"object_name", "angle_degrees"}, where="bend_mesh_part parameter")
-        if set(params) != {"object_name", "angle_degrees"}: raise ProtocolError("bend_mesh_part requires object_name and angle_degrees")
-        return {"object_name": _name(params["object_name"], "object_name"), "angle_degrees": _number(params["angle_degrees"], "angle_degrees", minimum=-180.0, maximum=180.0)}
+        _reject_unknown_keys(params, {"object_name", "angle_degrees", "bend_axis"}, where="bend_mesh_part parameter")
+        if not {"object_name", "angle_degrees"}.issubset(params): raise ProtocolError("bend_mesh_part requires object_name and angle_degrees")
+        axis = params.get("bend_axis", "x")
+        if axis not in {"x", "z"}: raise ProtocolError("bend_axis must be x or z")
+        return {"object_name": _name(params["object_name"], "object_name"), "angle_degrees": _number(params["angle_degrees"], "angle_degrees", minimum=-180.0, maximum=180.0), "bend_axis": axis}
 
     if operation == "reset_mesh_part":
         _reject_unknown_keys(params, {"object_name"}, where="reset_mesh_part parameter")
