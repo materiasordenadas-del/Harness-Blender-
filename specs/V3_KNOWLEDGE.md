@@ -1,5 +1,12 @@
 # V3 — Capa de conocimiento
 
+## Source repositories
+
+### SimWorld Studio
+https://github.com/SimWorld-AI/SimWorld-Studio
+
+Estudiar: skills bajo demanda, cliente de modelo intercambiable, recuperación de contexto y verificación. No copiar dependencias de Unreal o frontend.
+
 ## Objetivo
 
 V3 ayuda al agente a elegir capacidades existentes sin depender de recordar

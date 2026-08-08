@@ -4,6 +4,14 @@
 
 La IA no vive dentro de Blender. El proceso externo expone MCP; Blender recibe únicamente **operaciones semánticas tipadas** y las ejecuta mediante una lista cerrada de handlers. Ningún fragmento de Python viaja por el socket.
 
+## Fuentes de investigación por fase
+
+La metodología y las fuentes externas se mantienen en
+[`SOURCE_MAP.md`](SOURCE_MAP.md). Cada especificación de fase repite las fuentes
+que debe estudiar antes de implementar. Las referencias inspiran patrones; la
+API oficial de Blender es la autoridad técnica y el bridge de Harness nunca
+acepta Python arbitrario.
+
 ## Componentes
 
 ### 1. Agente

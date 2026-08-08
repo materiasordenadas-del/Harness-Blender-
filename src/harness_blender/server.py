@@ -483,6 +483,23 @@ def capture_controlled_view(
     return Image(data=data, format="png")
 
 
+@mcp.tool()
+def create_procedural_tube_setup(
+    object_name: str, group_name: str, profile_radius: float, resample_length: float
+) -> str:
+    """Attach a reversible Geometry Nodes tube recipe to one editable curve."""
+    return _run("create_procedural_tube_setup", {
+        "object_name": object_name, "group_name": group_name,
+        "profile_radius": profile_radius, "resample_length": resample_length,
+    })
+
+
+@mcp.tool()
+def inspect_geometry_node_tree(object_name: str) -> str:
+    """Inspect the Geometry Nodes group attached to one object."""
+    return _run("inspect_geometry_node_tree", {"object_name": object_name})
+
+
 @mcp.resource("harness://v1/capabilities")
 def capabilities() -> str:
     """Describe the exact limits of V1 so the agent does not invent tools."""
@@ -595,6 +612,20 @@ def v5_capabilities() -> str:
         "temporary_directory": "HARNESS_BLENDER_TEMP_DIR",
         "limits": {"default_iterations": 3, "maximum_iterations": 5, "correction_execution": "delegated to existing typed tools"},
         "not_yet_available": ["built-in vision model", "automatic technique selection"],
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+@mcp.resource("harness://v6/capabilities")
+def v6_capabilities() -> str:
+    """Describe the first reusable Geometry Nodes recipe."""
+    payload = {
+        "version": "0.7.0-v6-geometry-nodes",
+        "tools": ["create_procedural_tube_setup", "inspect_geometry_node_tree"],
+        "recipe": "curve input → resample by length → circle profile → curve to mesh",
+        "inputs": {"profile_radius": "0.001-1000", "resample_length": "0.001-1000"},
+        "reversible": True,
+        "not_yet_available": ["scatter", "instances", "procedural branching"],
     }
     return json.dumps(payload, ensure_ascii=False, indent=2)
 

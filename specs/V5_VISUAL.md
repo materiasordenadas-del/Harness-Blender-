@@ -1,5 +1,17 @@
 # V5 — percepción visual y evaluación visual
 
+## Source repositories
+
+### SimWorld Studio
+https://github.com/SimWorld-AI/SimWorld-Studio
+
+Estudiar: capturas, verificación visual y feedback limitado. No copiar streaming o componentes de Unreal.
+
+### EZBlender
+https://arxiv.org/abs/2601.07143
+
+Estudiar: Plan-and-ReAct como investigación. No es dependencia ni fuente de código.
+
 ## Objetivo
 
 V5 añade evidencia visual a las métricas deterministas de V4. Una revisión

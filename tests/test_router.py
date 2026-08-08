@@ -23,5 +23,11 @@ def test_routes_visual_review_without_editing_tools():
     assert "smooth_mesh" not in result.tools
 
 
+def test_routes_procedural_tube_without_low_level_node_tools():
+    result = route("crea un tubo procedural con Geometry Nodes")
+    assert result.skills == ("procedural-tubes",)
+    assert result.tools == ("create_procedural_tube_setup", "inspect_geometry_node_tree", "evaluate_tubular", "evaluate_mesh")
+
+
 def test_unknown_task_returns_safe_inspection_only():
     assert route("algo no clasificado").tools == ("inspect_scene",)
