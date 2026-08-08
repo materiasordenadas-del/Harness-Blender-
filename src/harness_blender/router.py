@@ -17,6 +17,12 @@ class Route:
 
 _RULES = (
     (
+        ("visual", "vista", "imagen", "captura", "referencia", "parece", "apariencia", "deformaci"),
+        ("visual-review",),
+        ("inspect_scene_detailed", "evaluate_mesh", "evaluate_tubular", "capture_controlled_view"),
+        ("https://docs.blender.org/manual/en/latest/editors/3dview/navigate/views.html",),
+    ),
+    (
         ("conectar", "unir", "union", "vaso", "vasos", "tubo", "tubos", "bifurc"),
         ("tubular-connections", "smooth-transitions", "bridge-loops"),
         ("inspect_mesh_detailed", "bridge_edge_loops", "voxel_remesh", "smooth_mesh", "recalculate_normals", "validate_mesh"),

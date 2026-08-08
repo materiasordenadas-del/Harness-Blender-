@@ -16,5 +16,12 @@ def test_routes_boolean_task():
     assert "boolean_intersection" in result.tools
 
 
+def test_routes_visual_review_without_editing_tools():
+    result = route("revisa visualmente si esta bifurcación parece abrupta")
+    assert result.skills == ("visual-review",)
+    assert result.tools == ("inspect_scene_detailed", "evaluate_mesh", "evaluate_tubular", "capture_controlled_view")
+    assert "smooth_mesh" not in result.tools
+
+
 def test_unknown_task_returns_safe_inspection_only():
     assert route("algo no clasificado").tools == ("inspect_scene",)
