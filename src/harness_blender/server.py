@@ -16,8 +16,10 @@ from .evaluator import diff_reports
 from .router import route
 from .skill_registry import content as skill_content, discover as discover_skills
 from .source_registry import load_sources
+from .scene_packet import enrich_task_packet
 from .task_packet import build_task_packet
 from .tool_catalog import list_candidates
+from .review_bundle import build_review_bundle, save_review_bundle
 from .visual_review import next_visual_review_step as decide_next_visual_review_step, validate_visual_review
 
 mcp = FastMCP("Harness Blender V1")
@@ -50,6 +52,59 @@ def route_blender_task(task: str) -> str:
 def build_blender_task_packet(task: str) -> str:
     """Return bounded skills, tools, checks and stop conditions for one task."""
     return json.dumps(build_task_packet(task), ensure_ascii=False, indent=2)
+
+
+def _snapshot_scene(object_names: list[str] | None = None) -> dict[str, Any]:
+    if object_names is not None and (not isinstance(object_names, list) or not all(isinstance(name, str) and name for name in object_names)):
+        raise ValueError("object_names must be a list of non-empty strings")
+    scene = _connection.call("inspect_scene_detailed")
+    requested = set(object_names or [item["name"] for item in scene["objects"]])
+    known = {item["name"] for item in scene["objects"]}
+    missing = requested - known
+    if missing:
+        raise ValueError(f"Unknown Blender object(s): {', '.join(sorted(missing))}")
+    objects = []
+    for item in scene["objects"]:
+        if item["name"] not in requested:
+            continue
+        entry = {"name": item["name"], "type": item["type"], "metrics": {}}
+        if item["type"] == "MESH":
+            entry["metrics"] = _connection.call("evaluate_mesh", {"object_name": item["name"]})
+        elif item["type"] == "CURVE":
+            try:
+                entry["metrics"] = _connection.call("evaluate_tubular", {"object_name": item["name"], "spline_index": 0})
+            except RuntimeError as exc:
+                # Inspection remains useful even when a curve is not yet a valid tube.
+                entry["metrics_error"] = str(exc)
+        objects.append(entry)
+    return {"scene": scene["scene"], "objects": objects}
+
+
+@mcp.tool()
+def capture_scene_snapshot(object_names: list[str] | None = None) -> str:
+    """Capture scene/object metrics before or after typed Blender operations."""
+    return json.dumps(_snapshot_scene(object_names), ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def build_scene_task_packet(task: str, object_names: list[str] | None = None) -> str:
+    """Build a Task Packet using live Blender object types and V4 metrics."""
+    return json.dumps(enrich_task_packet(build_task_packet(task), _snapshot_scene(object_names)), ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def build_review_bundle_from_snapshots(
+    before: dict[str, Any], after: dict[str, Any], operations: list[str], visual_review: dict[str, Any] | None = None,
+    visual_required: bool = False,
+) -> str:
+    """Compare real snapshots and return PASS, NEEDS_IMPROVEMENT, FAIL or NEEDS_REVIEW."""
+    return json.dumps(build_review_bundle(before, after, operations, visual_review, visual_required=visual_required), ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def save_review_bundle_to_evidence(bundle: dict[str, Any], evidence_id: str) -> str:
+    """Save one immutable evidence bundle under HARNESS_EVIDENCE_DIR."""
+    return json.dumps({"filepath": str(save_review_bundle(bundle, evidence_id))}, ensure_ascii=False, indent=2)
 
 
 @mcp.tool()

@@ -17,6 +17,16 @@ def test_diff_returns_none_percent_for_zero_baseline():
     assert diff_reports({"volume": 0}, {"volume": 1})["volume_delta_percent"] is None
 
 
+def test_diff_reports_geometry_risk_and_tubular_measurements():
+    result = diff_reports(
+        {"self_intersections": 0, "max_radius_jump": 0.1, "minimum_thickness": 0.5},
+        {"self_intersections": 2, "max_radius_jump": 0.12, "minimum_thickness": 0.45},
+    )
+    assert result["self_intersections_delta"] == 2
+    assert result["max_radius_jump_delta_percent"] == 20.0
+    assert result["minimum_thickness_delta_percent"] == -10.0
+
+
 def test_visual_review_is_normalized_and_allows_bounded_correction():
     review = validate_visual_review({
         "status": "needs_correction", "confidence": 0.88,
