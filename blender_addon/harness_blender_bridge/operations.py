@@ -598,6 +598,14 @@ OPERATIONS: dict[str, Operation] = {
 
 def dispatch_operation(operation: str, params: dict[str, Any]) -> dict[str, Any]:
     """Execute one already-validated V0 operation on Blender's main thread."""
+    if operation == "execute_batch":
+        results = []
+        for index, step in enumerate(params["steps"]):
+            try:
+                results.append({"operation": step["operation"], "result": dispatch_operation(step["operation"], step["params"])})
+            except Exception as exc:
+                return {"status": "failed", "failed_step": index + 1, "message": str(exc), "results": results}
+        return {"status": "completed", "results": results}
     handler = OPERATIONS.get(operation)
     if handler is None:
         raise ValueError(f"Operation is not implemented in V0: {operation!r}")

@@ -174,6 +174,13 @@ def test_asset_readiness_is_typed_and_rejects_extra_fields():
 def test_rigging_structure_inspection_is_typed_and_read_only():
     assert bridge_protocol.parse_operation_request(request("inspect_rigging_structure", {"object_name": "Mesh"}), TOKEN) == ("inspect_rigging_structure", {"object_name": "Mesh"})
 
+
+def test_v9_batch_validates_each_nested_semantic_operation():
+    operation, params = bridge_protocol.parse_operation_request(request("execute_batch", {"steps": [{"operation": "inspect_scene", "params": {}}]}), TOKEN)
+    assert operation == "execute_batch" and params["steps"][0]["operation"] == "inspect_scene"
+    with pytest.raises(bridge_protocol.ProtocolError):
+        bridge_protocol.parse_operation_request(request("execute_batch", {"steps": [{"operation": "execute_batch", "params": {}}]}), TOKEN)
+
 def test_movable_structure_contract_is_typed_and_bounded():
     operation, params = bridge_protocol.parse_operation_request(request("prepare_movable_structure", {"object_name": "Branch", "mode": "curve_guided"}), TOKEN)
     assert operation == "prepare_movable_structure" and params["mode"] == "curve_guided"

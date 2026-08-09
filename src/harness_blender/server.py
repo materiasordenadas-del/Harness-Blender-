@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import secrets
 from pathlib import Path
 from typing import Any
 
@@ -23,9 +24,11 @@ from .review_bundle import build_review_bundle, save_review_bundle
 from .benchmarks import run_benchmarks
 from .visual_review import next_visual_review_step as decide_next_visual_review_step, validate_visual_review
 from .visual_evidence import validate_visual_comparison
+from .v9_execution import validate_plan_steps
 
 mcp = FastMCP("Harness Blender V1")
 _connection = BlenderConnection()
+_V9_TASKS: dict[str, dict[str, Any]] = {}
 
 
 def _docs_path() -> Path:
@@ -92,6 +95,56 @@ def capture_scene_snapshot(object_names: list[str] | None = None) -> str:
 def build_scene_task_packet(task: str, object_names: list[str] | None = None) -> str:
     """Build a Task Packet using live Blender object types and V4 metrics."""
     return json.dumps(enrich_task_packet(build_task_packet(task), _snapshot_scene(object_names)), ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def prepare_v9_task(task: str, object_names: list[str] | None = None) -> str:
+    """Inspect selected objects and return a reviewed-plan preview; it never edits Blender."""
+    before = _snapshot_scene(object_names)
+    packet = enrich_task_packet(build_task_packet(task), before)
+    task_id = secrets.token_urlsafe(18)
+    _V9_TASKS[task_id] = {"before": before, "packet": packet, "object_names": [item["name"] for item in before["objects"]]}
+    return json.dumps({"task_id": task_id, "before": before, "packet": packet, "execution": "Call execute_v9_task only after reviewing a compatible plan."}, ensure_ascii=False, indent=2)
+
+
+def _v9_snapshot_steps(objects: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    steps = [{"operation": "inspect_scene_detailed", "params": {}}]
+    for item in objects:
+        if item["type"] == "MESH":
+            steps.append({"operation": "evaluate_mesh", "params": {"object_name": item["name"]}})
+        elif item["type"] == "CURVE":
+            steps.append({"operation": "evaluate_tubular", "params": {"object_name": item["name"], "spline_index": 0}})
+    return steps
+
+
+def _v9_after_snapshot(results: list[dict[str, Any]], objects: list[dict[str, Any]]) -> dict[str, Any]:
+    metric_count = sum(item["type"] in {"MESH", "CURVE"} for item in objects)
+    scene = results[-(metric_count + 1)]["result"]
+    metrics = iter(results[-metric_count:]) if metric_count else iter(())
+    metrics_by_name = {item["result"].get("name"): item["result"] for item in metrics}
+    object_names = {item["name"] for item in objects}
+    objects = [
+        {"name": item["name"], "type": item["type"], "metrics": metrics_by_name.get(item["name"], {})}
+        for item in scene["objects"] if item["name"] in object_names
+    ]
+    return {"scene": scene["scene"], "objects": objects}
+
+
+@mcp.tool()
+def execute_v9_task(task_id: str, steps: list[dict[str, Any]]) -> str:
+    """Execute one reviewed V9 plan in a single Blender bridge request; it never auto-undoes."""
+    task = _V9_TASKS.get(task_id)
+    if task is None:
+        raise ValueError("Unknown or expired V9 task")
+    plan = validate_plan_steps(steps, task["packet"]["allowed_tools"])
+    target_objects = task["before"]["objects"]
+    batch = plan + _v9_snapshot_steps(target_objects)
+    result = _connection.call("execute_batch", {"steps": batch})
+    if result["status"] != "completed":
+        return json.dumps({"status": "FAILED", "failed_step": result["failed_step"], "message": result["message"], "completed_steps": result["results"]}, ensure_ascii=False, indent=2)
+    after = _v9_after_snapshot(result["results"], target_objects)
+    bundle = build_review_bundle(task["before"], after, [step["operation"] for step in plan])
+    return json.dumps({"status": bundle["status"], "steps": result["results"][:len(plan)], "after": after, "review": bundle, "visual_review_recommended": task["packet"]["visual_evidence"]}, ensure_ascii=False, indent=2)
 
 
 @mcp.tool()

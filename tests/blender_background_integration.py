@@ -417,6 +417,21 @@ def main() -> None:
     assert bpy.data.objects.get("V2_Split_Negative") is None
     assert split_source.hide_get() is False
 
+    batch = dispatch_operation("execute_batch", {"steps": [
+        {"operation": "transform_object", "params": {"object_name": split_source.name, "location": [2, 0, 0]}},
+        {"operation": "inspect_object", "params": {"object_name": split_source.name}},
+    ]})
+    assert batch["status"] == "completed" and batch["results"][1]["result"]["name"] == split_source.name
+    assert_close(split_source.location, [2, 0, 0])
+    dispatch_operation("undo", {})
+    failed_batch = dispatch_operation("execute_batch", {"steps": [
+        {"operation": "transform_object", "params": {"object_name": split_source.name, "location": [3, 0, 0]}},
+        {"operation": "delete_object", "params": {"object_name": "Missing_V9_Object"}},
+    ]})
+    assert failed_batch["status"] == "failed" and failed_batch["failed_step"] == 2
+    assert_close(split_source.location, [3, 0, 0])
+    dispatch_operation("undo", {})
+
     print("HARNESS_BLENDER_BACKGROUND_INTEGRATION_OK")
 
 

@@ -17,6 +17,13 @@ Estudiar: ejecución-validación-diff, Plan-and-ReAct y recetas dependientes de 
 
 ## Objetivo
 
-Integrar un planner explícito, estado de tarea, revisión determinista y visual, y recetas aprendidas solo después de revisión humana.
+Reducir las esperas de tareas de varios pasos sin duplicar las capas ya
+implementadas en V3-V5. V9 prepara una tarea desde la escena real, muestra un
+plan revisable y ejecuta sus operaciones tipadas en una sola solicitud al
+bridge.
 
-Flujo objetivo: `planner → coder → Blender → reviewer/verifier → planner`.
+Flujo inicial: `preparar → revisar plan → ejecución agrupada → snapshot/diff → revisión visual si se solicita`.
+
+No incluye multiagentes, memoria de recetas, checkpoints ni corrección o
+reversión automática. Si un paso falla, la ejecución se detiene e informa el
+paso; el usuario conserva el undo normal de Blender.

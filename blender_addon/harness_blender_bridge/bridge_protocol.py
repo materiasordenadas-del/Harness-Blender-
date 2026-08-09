@@ -16,6 +16,7 @@ from typing import Any
 
 ALLOWED_PRIMITIVES = {"cube", "uv_sphere", "cylinder", "cone", "torus"}
 ALLOWED_OPERATIONS = {
+    "execute_batch",
     "ping",
     "inspect_scene",
     "inspect_scene_detailed",
@@ -175,6 +176,21 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         raise ProtocolError(f"Operation is not allowed in V0: {operation!r}")
     if not isinstance(params, dict):
         raise ProtocolError("params must be a JSON object")
+
+    if operation == "execute_batch":
+        _reject_unknown_keys(params, {"steps"}, where="execute_batch parameter")
+        steps = params.get("steps")
+        if not isinstance(steps, list) or not 1 <= len(steps) <= 32:
+            raise ProtocolError("execute_batch steps must contain 1-32 items")
+        normalized = []
+        for index, step in enumerate(steps):
+            if not isinstance(step, dict) or set(step) != {"operation", "params"}:
+                raise ProtocolError(f"execute_batch step {index + 1} must contain operation and params")
+            nested = step["operation"]
+            if not isinstance(nested, str) or nested == "execute_batch":
+                raise ProtocolError("execute_batch cannot contain execute_batch")
+            normalized.append({"operation": nested, "params": validate_operation_params(nested, step["params"])})
+        return {"steps": normalized}
 
     if operation in {"ping", "inspect_scene", "inspect_scene_detailed", "inspect_active_selection", "undo", "capture_screen"}:
         return _no_params(params, operation)
