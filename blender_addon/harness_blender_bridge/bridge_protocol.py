@@ -21,6 +21,16 @@ ALLOWED_OPERATIONS = {
     "inspect_scene_detailed",
     "evaluate_mesh",
     "evaluate_asset_readiness",
+    "inspect_rigging_structure",
+    "inspect_movable_structure", "prepare_movable_structure", "list_movable_parts", "get_part_state", "reset_structure",
+    "bend_curve_part", "reset_curve_part",
+    "move_curve_part", "twist_curve_part",
+    "propose_mesh_extension", "prepare_selected_mesh_extension", "prepare_mesh_extension", "bend_mesh_part", "reset_mesh_part",
+    "create_v8_session", "inspect_v8_session", "reset_v8_session", "accept_v8_session", "discard_v8_session",
+    "pose_v8_control",
+    "create_v8_auto_rig",
+    "create_v8_independent_handles",
+    "propose_v8_photo_pose",
     "evaluate_spatial",
     "evaluate_tubular",
     "evaluate_penetration",
@@ -34,6 +44,8 @@ ALLOWED_OPERATIONS = {
     "evaluate_uv_layout",
     "unwrap_uv",
     "sculpt_smooth_region",
+    "solidify_mesh",
+    "make_mesh_solid",
     "evaluate_mesh",
     "recalculate_normals",
     "flip_normals",
@@ -132,6 +144,14 @@ def _integer(value: Any, field: str, *, minimum: int, maximum: int) -> int:
     return value
 
 
+def _vertex_indices(value: Any, field: str) -> list[int]:
+    if not isinstance(value, list) or not value or len(value) > 200_000:
+        raise ProtocolError(f"{field} must contain 1-200000 vertex indices")
+    result = [_integer(item, field, minimum=0, maximum=10_000_000) for item in value]
+    if len(set(result)) != len(result): raise ProtocolError(f"{field} must not contain duplicates")
+    return result
+
+
 def _curve_point_target(params: dict[str, Any], operation: str, value_field: str) -> dict[str, Any]:
     allowed = {"object_name", "spline_index", "point_index", value_field}
     _reject_unknown_keys(params, allowed, where=f"{operation} parameter")
@@ -210,7 +230,7 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         _reject_unknown_keys(params, {"object_name"}, where="inspect_geometry_node_tree parameter")
         return {"object_name": _name(params.get("object_name"), "object_name")}
 
-    if operation in {"inspect_object", "delete_object", "validate_mesh", "inspect_mesh_detailed", "inspect_uv", "evaluate_uv_layout", "evaluate_mesh", "evaluate_asset_readiness"}:
+    if operation in {"inspect_object", "delete_object", "validate_mesh", "inspect_mesh_detailed", "inspect_uv", "evaluate_uv_layout", "evaluate_mesh", "evaluate_asset_readiness", "inspect_rigging_structure", "inspect_movable_structure", "list_movable_parts", "reset_structure"}:
         _reject_unknown_keys(params, {"object_name"}, where=f"{operation} parameter")
         if "object_name" not in params:
             raise ProtocolError(f"{operation} requires object_name")
@@ -278,6 +298,109 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
             raise ProtocolError("inspect_curve requires object_name")
         return {"object_name": _name(params["object_name"], "object_name")}
 
+    if operation == "prepare_movable_structure":
+        _reject_unknown_keys(params, {"object_name", "mode"}, where="prepare_movable_structure parameter")
+        if "object_name" not in params: raise ProtocolError("prepare_movable_structure requires object_name")
+        mode = params.get("mode")
+        if mode is not None and mode not in {"curve_guided", "mesh_guided"}: raise ProtocolError("mode must be curve_guided or mesh_guided")
+        return {"object_name": _name(params["object_name"], "object_name"), "mode": mode}
+
+    if operation == "get_part_state":
+        _reject_unknown_keys(params, {"object_name", "part_name"}, where="get_part_state parameter")
+        if set(params) != {"object_name", "part_name"}: raise ProtocolError("get_part_state requires object_name and part_name")
+        return {"object_name": _name(params["object_name"], "object_name"), "part_name": _name(params["part_name"], "part_name")}
+
+    if operation == "bend_curve_part":
+        _reject_unknown_keys(params, {"object_name", "part_name", "angle_degrees"}, where="bend_curve_part parameter")
+        if set(params) != {"object_name", "part_name", "angle_degrees"}: raise ProtocolError("bend_curve_part requires object_name, part_name and angle_degrees")
+        return {"object_name": _name(params["object_name"], "object_name"), "part_name": _name(params["part_name"], "part_name"), "angle_degrees": _number(params["angle_degrees"], "angle_degrees", minimum=-180.0, maximum=180.0)}
+
+    if operation == "reset_curve_part":
+        _reject_unknown_keys(params, {"object_name", "part_name"}, where="reset_curve_part parameter")
+        if set(params) != {"object_name", "part_name"}: raise ProtocolError("reset_curve_part requires object_name and part_name")
+        return {"object_name": _name(params["object_name"], "object_name"), "part_name": _name(params["part_name"], "part_name")}
+
+    if operation == "move_curve_part":
+        _reject_unknown_keys(params, {"object_name", "part_name", "offset"}, where="move_curve_part parameter")
+        if set(params) != {"object_name", "part_name", "offset"}: raise ProtocolError("move_curve_part requires object_name, part_name and offset")
+        return {"object_name": _name(params["object_name"], "object_name"), "part_name": _name(params["part_name"], "part_name"), "offset": _vec3(params["offset"], "offset")}
+
+    if operation == "twist_curve_part":
+        _reject_unknown_keys(params, {"object_name", "part_name", "angle_degrees"}, where="twist_curve_part parameter")
+        if set(params) != {"object_name", "part_name", "angle_degrees"}: raise ProtocolError("twist_curve_part requires object_name, part_name and angle_degrees")
+        return {"object_name": _name(params["object_name"], "object_name"), "part_name": _name(params["part_name"], "part_name"), "angle_degrees": _number(params["angle_degrees"], "angle_degrees", minimum=-180.0, maximum=180.0)}
+
+    if operation == "prepare_mesh_extension":
+        _reject_unknown_keys(params, {"object_name", "part_name", "vertex_indices", "base_vertex_indices"}, where="prepare_mesh_extension parameter")
+        if set(params) != {"object_name", "part_name", "vertex_indices", "base_vertex_indices"}: raise ProtocolError("prepare_mesh_extension requires object_name, part_name, vertex_indices and base_vertex_indices")
+        return {"object_name": _name(params["object_name"], "object_name"), "part_name": _name(params["part_name"], "part_name"), "vertex_indices": _vertex_indices(params["vertex_indices"], "vertex_indices"), "base_vertex_indices": _vertex_indices(params["base_vertex_indices"], "base_vertex_indices")}
+
+    if operation == "prepare_selected_mesh_extension":
+        _reject_unknown_keys(params, {"object_name", "part_name"}, where="prepare_selected_mesh_extension parameter")
+        if set(params) != {"object_name", "part_name"}: raise ProtocolError("prepare_selected_mesh_extension requires object_name and part_name")
+        return {"object_name": _name(params["object_name"], "object_name"), "part_name": _name(params["part_name"], "part_name")}
+
+    if operation == "propose_mesh_extension":
+        _reject_unknown_keys(params, {"object_name"}, where="propose_mesh_extension parameter")
+        if set(params) != {"object_name"}: raise ProtocolError("propose_mesh_extension requires object_name")
+        return {"object_name": _name(params["object_name"], "object_name")}
+
+    if operation == "bend_mesh_part":
+        _reject_unknown_keys(params, {"object_name", "angle_degrees", "bend_axis", "screen_direction"}, where="bend_mesh_part parameter")
+        if not {"object_name", "angle_degrees"}.issubset(params): raise ProtocolError("bend_mesh_part requires object_name and angle_degrees")
+        if "bend_axis" in params and "screen_direction" in params: raise ProtocolError("bend_mesh_part accepts bend_axis or screen_direction, not both")
+        axis = params.get("bend_axis", "x")
+        if axis not in {"x", "z"}: raise ProtocolError("bend_axis must be x or z")
+        direction = params.get("screen_direction")
+        if direction is not None and direction not in {"left", "right", "up", "down"}: raise ProtocolError("screen_direction must be left, right, up or down")
+        return {"object_name": _name(params["object_name"], "object_name"), "angle_degrees": _number(params["angle_degrees"], "angle_degrees", minimum=-180.0, maximum=180.0), "bend_axis": axis, "screen_direction": direction}
+
+    if operation == "reset_mesh_part":
+        _reject_unknown_keys(params, {"object_name"}, where="reset_mesh_part parameter")
+        if set(params) != {"object_name"}: raise ProtocolError("reset_mesh_part requires object_name")
+        return {"object_name": _name(params["object_name"], "object_name")}
+
+    if operation == "create_v8_session":
+        _reject_unknown_keys(params, {"session_name", "object_names"}, where="create_v8_session parameter")
+        session_name = _name(params.get("session_name", "Session"), "session_name")
+        names = params.get("object_names")
+        if names is not None:
+            if not isinstance(names, list) or not names:
+                raise ProtocolError("object_names must be a non-empty list when provided")
+            names = [_name(item, "object_name") for item in names]
+            if len(names) != len(set(names)): raise ProtocolError("object_names must be distinct")
+        return {"session_name": session_name, "object_names": names}
+
+    if operation in {"inspect_v8_session", "reset_v8_session", "accept_v8_session", "discard_v8_session"}:
+        _reject_unknown_keys(params, {"session_name"}, where=f"{operation} parameter")
+        if set(params) != {"session_name"}: raise ProtocolError(f"{operation} requires session_name")
+        return {"session_name": _name(params["session_name"], "session_name")}
+
+    if operation == "pose_v8_control":
+        allowed = {"session_name", "copy_object", "control_bone", "location", "rotation_degrees"}
+        _reject_unknown_keys(params, allowed, where="pose_v8_control parameter")
+        if not {"session_name", "copy_object"}.issubset(params): raise ProtocolError("pose_v8_control requires session_name and copy_object")
+        result = {"session_name": _name(params["session_name"], "session_name"), "copy_object": _name(params["copy_object"], "copy_object"), "location": _vec3(params.get("location", [0, 0, 0]), "location"), "rotation_degrees": _vec3(params.get("rotation_degrees", [0, 0, 0]), "rotation_degrees")}
+        if "control_bone" in params: result["control_bone"] = _name(params["control_bone"], "control_bone")
+        return result
+
+    if operation == "create_v8_auto_rig":
+        allowed = {"session_name", "copy_object", "bone_count"}; _reject_unknown_keys(params, allowed, where="create_v8_auto_rig parameter")
+        if not {"session_name", "copy_object"}.issubset(params): raise ProtocolError("create_v8_auto_rig requires session_name and copy_object")
+        count = params.get("bone_count", 4)
+        if isinstance(count, bool) or not isinstance(count, int) or not 2 <= count <= 16: raise ProtocolError("bone_count must be an integer between 2 and 16")
+        return {"session_name": _name(params["session_name"], "session_name"), "copy_object": _name(params["copy_object"], "copy_object"), "bone_count": count}
+
+    if operation == "create_v8_independent_handles":
+        _reject_unknown_keys(params, {"session_name", "copy_object"}, where="create_v8_independent_handles parameter")
+        if set(params) != {"session_name", "copy_object"}: raise ProtocolError("create_v8_independent_handles requires session_name and copy_object")
+        return {"session_name": _name(params["session_name"], "session_name"), "copy_object": _name(params["copy_object"], "copy_object")}
+
+    if operation == "propose_v8_photo_pose":
+        allowed = {"session_name", "copy_object", "control_bone", "front_offset", "side_offset"}; _reject_unknown_keys(params, allowed, where="propose_v8_photo_pose parameter")
+        if set(params) != allowed: raise ProtocolError("propose_v8_photo_pose requires two view offsets and an existing handle")
+        return {"session_name": _name(params["session_name"], "session_name"), "copy_object": _name(params["copy_object"], "copy_object"), "control_bone": _name(params["control_bone"], "control_bone"), "front_offset": _vec3([params["front_offset"][0], 0, params["front_offset"][1]], "front_offset")[:2], "side_offset": _vec3([params["side_offset"][0], 0, params["side_offset"][1]], "side_offset")[:2]}
+
     if operation == "unwrap_uv":
         allowed = {"object_name", "method", "margin"}
         _reject_unknown_keys(params, allowed, where="unwrap_uv parameter")
@@ -301,6 +424,27 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         if not isinstance(indices, list) or not 1 <= len(indices) <= 256 or any(not isinstance(item, int) or item < 0 for item in indices) or len(indices) != len(set(indices)):
             raise ProtocolError("vertex_indices must contain 1-256 distinct non-negative integers")
         return {"object_name": _name(params["object_name"], "object_name"), "vertex_indices": indices, "factor": _number(params.get("factor", 0.5), "factor", minimum=0.0, maximum=1.0), "iterations": _integer(params.get("iterations", 1), "iterations", minimum=1, maximum=10)}
+
+    if operation == "solidify_mesh":
+        allowed = {"object_name", "thickness", "offset", "fill_rim", "modifier_name"}
+        _reject_unknown_keys(params, allowed, where="solidify_mesh parameter")
+        if "object_name" not in params or "thickness" not in params:
+            raise ProtocolError("solidify_mesh requires object_name and thickness")
+        fill_rim = params.get("fill_rim", True)
+        if not isinstance(fill_rim, bool):
+            raise ProtocolError("fill_rim must be a boolean")
+        return {"object_name": _name(params["object_name"], "object_name"), "thickness": _number(params["thickness"], "thickness", minimum=0.0001, maximum=1000.0), "offset": _number(params.get("offset", -1.0), "offset", minimum=-1.0, maximum=1.0), "fill_rim": fill_rim, "modifier_name": _name(params.get("modifier_name", "Harness Solidify"), "modifier_name")}
+
+    if operation == "make_mesh_solid":
+        allowed = {"object_name", "output_name", "thickness", "voxel_size"}
+        _reject_unknown_keys(params, allowed, where="make_mesh_solid parameter")
+        if set(params) != allowed:
+            raise ProtocolError("make_mesh_solid requires object_name, output_name, thickness and voxel_size")
+        source = _name(params["object_name"], "object_name")
+        output = _name(params["output_name"], "output_name")
+        if source == output:
+            raise ProtocolError("output_name must differ from object_name")
+        return {"object_name": source, "output_name": output, "thickness": _number(params["thickness"], "thickness", minimum=0.0001, maximum=1000.0), "voxel_size": _number(params["voxel_size"], "voxel_size", minimum=0.001, maximum=1000.0)}
 
     if operation == "split_mesh_by_plane":
         allowed = {"object_name", "plane_point", "plane_normal", "positive_name", "negative_name", "cap"}

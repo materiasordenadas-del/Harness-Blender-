@@ -359,6 +359,53 @@ def add_modifier(params: dict[str, Any]) -> dict[str, Any]:
     return {"object_name": obj.name, "name": modifier.name, "modifier_type": modifier.type}
 
 
+def solidify_mesh(params: dict[str, Any]) -> dict[str, Any]:
+    """Add a reversible Solidify modifier with optional closing rims."""
+    obj = _mesh_object(params["object_name"])
+    modifier_name = params.get("modifier_name", "Harness Solidify")
+    if obj.modifiers.get(modifier_name) is not None:
+        raise ValueError(f"Modifier already exists: {modifier_name}")
+    modifier = obj.modifiers.new(modifier_name, "SOLIDIFY")
+    modifier.thickness = params["thickness"]
+    modifier.offset = params.get("offset", -1.0)
+    modifier.use_rim = params.get("fill_rim", True)
+    _record_undo("solidify mesh", lambda: obj.modifiers.remove(modifier) if obj.modifiers.get(modifier.name) else None)
+    return {"object_name": obj.name, "modifier_name": modifier.name, "thickness": float(modifier.thickness), "offset": float(modifier.offset), "fill_rim": bool(modifier.use_rim), "applied": False}
+
+
+def make_mesh_solid(params: dict[str, Any]) -> dict[str, Any]:
+    """Create a separate closed voxel-remeshed solid from a surface mesh."""
+    source = _mesh_object(params["object_name"])
+    if bpy.data.objects.get(params["output_name"]) is not None:
+        raise ValueError(f"Object already exists: {params['output_name']}")
+    result = bpy.data.objects.new(params["output_name"], source.data.copy())
+    result.matrix_world = source.matrix_world.copy()
+    for collection in source.users_collection or (bpy.context.scene.collection,):
+        collection.objects.link(result)
+    selected, active = list(bpy.context.selected_objects), bpy.context.view_layer.objects.active
+    try:
+        for item in selected: item.select_set(False)
+        result.select_set(True); bpy.context.view_layer.objects.active = result
+        modifier = result.modifiers.new("Harness Solidify", "SOLIDIFY")
+        modifier.thickness = params["thickness"]; modifier.use_rim = True
+        if "FINISHED" not in bpy.ops.object.modifier_apply(modifier=modifier.name):
+            raise RuntimeError("Blender could not apply Solidify")
+        result.data.remesh_voxel_size = params["voxel_size"]
+        if "FINISHED" not in bpy.ops.object.voxel_remesh():
+            raise RuntimeError("Blender could not voxel remesh the solid copy")
+    except Exception:
+        bpy.data.objects.remove(result, do_unlink=True)
+        raise
+    finally:
+        for item in list(bpy.context.selected_objects): item.select_set(False)
+        for item in selected: item.select_set(True)
+        bpy.context.view_layer.objects.active = active
+    bm = bmesh.new(); bm.from_mesh(result.data)
+    closed = all(not edge.is_boundary and edge.is_manifold for edge in bm.edges); bm.free()
+    _record_undo("make mesh solid", lambda: bpy.data.objects.remove(result, do_unlink=True) if bpy.data.objects.get(result.name) else None)
+    return {"source_object": source.name, "solid_object": result.name, "thickness": params["thickness"], "voxel_size": params["voxel_size"], "is_closed_manifold": closed}
+
+
 def set_modifier_parameter(params: dict[str, Any]) -> dict[str, Any]:
     obj = _mesh_object(params["object_name"])
     modifier = obj.modifiers.get(params["modifier_name"])

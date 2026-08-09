@@ -269,6 +269,127 @@ def evaluate_asset_readiness(object_name: str) -> str:
 
 
 @mcp.tool()
+def inspect_rigging_structure(object_name: str) -> str:
+    """Inspect rig-related mesh or armature structure without editing Blender."""
+    return _run("inspect_rigging_structure", {"object_name": object_name})
+
+@mcp.tool()
+def inspect_movable_structure(object_name: str) -> str:
+    """Inspect a mesh or curve as a possible movable structure without changing it."""
+    return _run("inspect_movable_structure", {"object_name": object_name})
+
+@mcp.tool()
+def prepare_movable_structure(object_name: str, mode: str | None = None) -> str:
+    """Register simple, reversible parts for a named mesh or curve; no geometry changes."""
+    return _run("prepare_movable_structure", {"object_name": object_name, "mode": mode})
+
+@mcp.tool()
+def list_movable_parts(object_name: str) -> str:
+    """List user-facing parts registered for a movable structure."""
+    return _run("list_movable_parts", {"object_name": object_name})
+
+@mcp.tool()
+def get_part_state(object_name: str, part_name: str) -> str:
+    """Read the state of one named movable part."""
+    return _run("get_part_state", {"object_name": object_name, "part_name": part_name})
+
+@mcp.tool()
+def reset_structure(object_name: str) -> str:
+    """Restore registered movable parts to neutral state; can be undone."""
+    return _run("reset_structure", {"object_name": object_name})
+
+@mcp.tool()
+def bend_curve_part(object_name: str, part_name: str, angle_degrees: float) -> str:
+    """Bend one prepared curve part while its base point stays fixed; reversible with reset_curve_part."""
+    return _run("bend_curve_part", {"object_name": object_name, "part_name": part_name, "angle_degrees": angle_degrees})
+
+@mcp.tool()
+def reset_curve_part(object_name: str, part_name: str) -> str:
+    """Restore the original editable curve shape saved before its first bend."""
+    return _run("reset_curve_part", {"object_name": object_name, "part_name": part_name})
+
+@mcp.tool()
+def move_curve_part(object_name: str, part_name: str, offset: list[float]) -> str:
+    """Move a prepared curve part gradually from its protected base."""
+    return _run("move_curve_part", {"object_name": object_name, "part_name": part_name, "offset": offset})
+
+@mcp.tool()
+def twist_curve_part(object_name: str, part_name: str, angle_degrees: float) -> str:
+    """Twist a prepared curve part gradually from its protected base."""
+    return _run("twist_curve_part", {"object_name": object_name, "part_name": part_name, "angle_degrees": angle_degrees})
+
+@mcp.tool()
+def propose_mesh_extension(object_name: str) -> str:
+    """Return a non-editing V8.2 mesh proposal that requires explicit extension and base selections."""
+    return _run("propose_mesh_extension", {"object_name": object_name})
+
+@mcp.tool()
+def prepare_mesh_extension(object_name: str, part_name: str, vertex_indices: list[int], base_vertex_indices: list[int]) -> str:
+    """Create a temporary visible mesh copy for one explicitly selected extension; the source mesh remains unchanged."""
+    return _run("prepare_mesh_extension", {"object_name": object_name, "part_name": part_name, "vertex_indices": vertex_indices, "base_vertex_indices": base_vertex_indices})
+
+@mcp.tool()
+def prepare_selected_mesh_extension(object_name: str, part_name: str) -> str:
+    """Create a temporary mesh copy from a visible Blender vertex selection; its attached boundary becomes the protected base."""
+    return _run("prepare_selected_mesh_extension", {"object_name": object_name, "part_name": part_name})
+
+@mcp.tool()
+def bend_mesh_part(object_name: str, angle_degrees: float, bend_axis: str | None = None, screen_direction: str | None = None) -> str:
+    """Bend a temporary V8.2 mesh copy by a local plane or a simple visible direction: left, right, up or down."""
+    params: dict[str, object] = {"object_name": object_name, "angle_degrees": angle_degrees}
+    if bend_axis is not None: params["bend_axis"] = bend_axis
+    if screen_direction is not None: params["screen_direction"] = screen_direction
+    return _run("bend_mesh_part", params)
+
+@mcp.tool()
+def reset_mesh_part(object_name: str) -> str:
+    """Restore the selected extension of a temporary V8.2 mesh copy from its unchanged source mesh."""
+    return _run("reset_mesh_part", {"object_name": object_name})
+
+@mcp.tool()
+def create_v8_session(session_name: str = "Session", object_names: list[str] | None = None) -> str:
+    """Create a temporary V8.2 rig preview for selected mesh objects; originals remain unchanged."""
+    params: dict[str, object] = {"session_name": session_name}
+    if object_names is not None: params["object_names"] = object_names
+    return _run("create_v8_session", params)
+
+@mcp.tool()
+def inspect_v8_session(session_name: str) -> str:
+    """Inspect a V8.2 preview session, its copies and visible controls without editing Blender."""
+    return _run("inspect_v8_session", {"session_name": session_name})
+
+@mcp.tool()
+def reset_v8_session(session_name: str) -> str:
+    """Restore every visible V8.2 control in a preview session to its neutral pose."""
+    return _run("reset_v8_session", {"session_name": session_name})
+
+@mcp.tool()
+def pose_v8_control(session_name: str, copy_object: str, location: list[float] | None = None, rotation_degrees: list[float] | None = None) -> str:
+    """Move or rotate one visible V8.2 control bone on a temporary copy; the source remains unchanged."""
+    return _run("pose_v8_control", {"session_name": session_name, "copy_object": copy_object, "location": location or [0, 0, 0], "rotation_degrees": rotation_degrees or [0, 0, 0]})
+
+@mcp.tool()
+def create_v8_auto_rig(session_name: str, copy_object: str, bone_count: int = 4) -> str:
+    """Create a local automatic V8.3 chain with 2-16 bones; it yields one independent handle per joint."""
+    return _run("create_v8_auto_rig", {"session_name": session_name, "copy_object": copy_object, "bone_count": bone_count})
+
+@mcp.tool()
+def create_v8_independent_handles(session_name: str, copy_object: str) -> str:
+    """Replace a V8.3 chain with independent local handles; moving one handle does not move the other handles."""
+    return _run("create_v8_independent_handles", {"session_name": session_name, "copy_object": copy_object})
+
+@mcp.tool()
+def accept_v8_session(session_name: str) -> str:
+    """Keep the V8.2 preview copy as an accepted editable result; the source remains unchanged."""
+    return _run("accept_v8_session", {"session_name": session_name})
+
+@mcp.tool()
+def discard_v8_session(session_name: str) -> str:
+    """Delete a V8.2 preview copy and rig while leaving all original objects unchanged."""
+    return _run("discard_v8_session", {"session_name": session_name})
+
+
+@mcp.tool()
 def evaluate_spatial(object_name: str, target_object_name: str) -> str:
     """Measure world bounding-box overlap and nearest-box distance without editing Blender."""
     return _run("evaluate_spatial", {"object_name": object_name, "target_object_name": target_object_name})
@@ -350,6 +471,18 @@ def set_alpha(material_name: str, alpha: float) -> str:
 def add_modifier(object_name: str, name: str, modifier_type: str) -> str:
     """Add one modifier from the V2 allowlist, reversibly."""
     return _run("add_modifier", {"object_name": object_name, "name": name, "modifier_type": modifier_type})
+
+
+@mcp.tool()
+def solidify_mesh(object_name: str, thickness: float, offset: float = -1.0, fill_rim: bool = True, modifier_name: str = "Harness Solidify") -> str:
+    """Give a mesh reversible wall thickness; fill_rim closes its open border."""
+    return _run("solidify_mesh", {"object_name": object_name, "thickness": thickness, "offset": offset, "fill_rim": fill_rim, "modifier_name": modifier_name})
+
+
+@mcp.tool()
+def make_mesh_solid(object_name: str, output_name: str, thickness: float, voxel_size: float) -> str:
+    """Create a separate closed solid copy from a surface mesh; the source remains unchanged."""
+    return _run("make_mesh_solid", {"object_name": object_name, "output_name": output_name, "thickness": thickness, "voxel_size": voxel_size})
 
 
 @mcp.tool()

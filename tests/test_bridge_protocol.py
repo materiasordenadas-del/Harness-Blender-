@@ -171,6 +171,54 @@ def test_asset_readiness_is_typed_and_rejects_extra_fields():
         )
 
 
+def test_rigging_structure_inspection_is_typed_and_read_only():
+    assert bridge_protocol.parse_operation_request(request("inspect_rigging_structure", {"object_name": "Mesh"}), TOKEN) == ("inspect_rigging_structure", {"object_name": "Mesh"})
+
+def test_movable_structure_contract_is_typed_and_bounded():
+    operation, params = bridge_protocol.parse_operation_request(request("prepare_movable_structure", {"object_name": "Branch", "mode": "curve_guided"}), TOKEN)
+    assert operation == "prepare_movable_structure" and params["mode"] == "curve_guided"
+    assert bridge_protocol.parse_operation_request(request("get_part_state", {"object_name": "Branch", "part_name": "Process_01"}), TOKEN)[1]["part_name"] == "Process_01"
+    with pytest.raises(bridge_protocol.ProtocolError, match="curve_guided or mesh_guided"):
+        bridge_protocol.parse_operation_request(request("prepare_movable_structure", {"object_name": "Branch", "mode": "automatic"}), TOKEN)
+
+def test_curve_bend_is_bounded_and_requires_a_named_part():
+    assert bridge_protocol.parse_operation_request(request("bend_curve_part", {"object_name": "Branch", "part_name": "Process_01", "angle_degrees": -30}), TOKEN)[1]["angle_degrees"] == -30.0
+    with pytest.raises(bridge_protocol.ProtocolError, match="between -180 and 180"):
+        bridge_protocol.parse_operation_request(request("bend_curve_part", {"object_name": "Branch", "part_name": "Process_01", "angle_degrees": 181}), TOKEN)
+
+def test_mesh_extension_contract_requires_explicit_bounded_selection():
+    operation, params = bridge_protocol.parse_operation_request(request("prepare_mesh_extension", {
+        "object_name": "Torso", "part_name": "Process_01", "vertex_indices": [1, 2, 3], "base_vertex_indices": [1],
+    }), TOKEN)
+    assert operation == "prepare_mesh_extension" and params["vertex_indices"] == [1, 2, 3]
+    with pytest.raises(bridge_protocol.ProtocolError, match="must not contain duplicates"):
+        bridge_protocol.parse_operation_request(request("prepare_mesh_extension", {
+            "object_name": "Torso", "part_name": "Process_01", "vertex_indices": [1, 1], "base_vertex_indices": [1],
+        }), TOKEN)
+
+def test_mesh_bend_accepts_only_a_local_bend_plane():
+    assert bridge_protocol.parse_operation_request(request("bend_mesh_part", {"object_name": "Copy", "angle_degrees": 25, "bend_axis": "z"}), TOKEN)[1]["bend_axis"] == "z"
+    with pytest.raises(bridge_protocol.ProtocolError, match="bend_axis must be x or z"):
+        bridge_protocol.parse_operation_request(request("bend_mesh_part", {"object_name": "Copy", "angle_degrees": 25, "bend_axis": "y"}), TOKEN)
+
+def test_mesh_bend_accepts_a_simple_screen_direction():
+    params = bridge_protocol.parse_operation_request(request("bend_mesh_part", {"object_name": "Copy", "angle_degrees": 25, "screen_direction": "left"}), TOKEN)[1]
+    assert params["screen_direction"] == "left"
+    with pytest.raises(bridge_protocol.ProtocolError, match="not both"):
+        bridge_protocol.parse_operation_request(request("bend_mesh_part", {"object_name": "Copy", "angle_degrees": 25, "bend_axis": "x", "screen_direction": "left"}), TOKEN)
+
+def test_v8_session_contract_accepts_selection_or_explicit_mesh_names():
+    operation, params = bridge_protocol.parse_operation_request(request("create_v8_session", {"session_name": "Preview", "object_names": ["A", "B"]}), TOKEN)
+    assert operation == "create_v8_session"
+    assert params == {"session_name": "Preview", "object_names": ["A", "B"]}
+    assert bridge_protocol.parse_operation_request(request("create_v8_session", {}), TOKEN)[1]["object_names"] is None
+    with pytest.raises(bridge_protocol.ProtocolError, match="distinct"):
+        bridge_protocol.parse_operation_request(request("create_v8_session", {"object_names": ["A", "A"]}), TOKEN)
+    assert bridge_protocol.parse_operation_request(request("reset_v8_session", {"session_name": "Preview"}), TOKEN)[1] == {"session_name": "Preview"}
+    pose = bridge_protocol.parse_operation_request(request("pose_v8_control", {"session_name": "Preview", "copy_object": "A", "location": [1, 0, 0]}), TOKEN)[1]
+    assert pose["location"] == [1.0, 0.0, 0.0] and pose["rotation_degrees"] == [0.0, 0.0, 0.0]
+
+
 def test_uv_inspection_is_typed_and_read_only():
     operation, params = bridge_protocol.parse_operation_request(
         request("inspect_uv", {"object_name": "Asset"}), TOKEN
@@ -203,3 +251,18 @@ def test_sculpt_smooth_region_is_bounded_and_explicit():
     assert params["vertex_indices"] == [0, 1]
     with pytest.raises(bridge_protocol.ProtocolError, match="distinct"):
         bridge_protocol.parse_operation_request(request("sculpt_smooth_region", {"object_name": "Asset", "vertex_indices": [0, 0]}), TOKEN)
+
+
+def test_solidify_mesh_is_bounded_and_reversible_by_contract():
+    operation, params = bridge_protocol.parse_operation_request(request("solidify_mesh", {"object_name": "Surface", "thickness": 0.2, "fill_rim": True}), TOKEN)
+    assert operation == "solidify_mesh"
+    assert params["offset"] == -1.0
+    with pytest.raises(bridge_protocol.ProtocolError, match="thickness"):
+        bridge_protocol.parse_operation_request(request("solidify_mesh", {"object_name": "Surface", "thickness": 0}), TOKEN)
+
+
+def test_make_mesh_solid_requires_a_distinct_output():
+    operation, params = bridge_protocol.parse_operation_request(request("make_mesh_solid", {"object_name": "Podocyte", "output_name": "PodocyteSolid", "thickness": 0.1, "voxel_size": 0.05}), TOKEN)
+    assert operation == "make_mesh_solid"
+    with pytest.raises(bridge_protocol.ProtocolError, match="must differ"):
+        bridge_protocol.parse_operation_request(request("make_mesh_solid", {"object_name": "Podocyte", "output_name": "Podocyte", "thickness": 0.1, "voxel_size": 0.05}), TOKEN)

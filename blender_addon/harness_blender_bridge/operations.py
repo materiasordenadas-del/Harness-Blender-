@@ -37,6 +37,7 @@ from . import curve_operations
 from . import mesh_operations
 from . import evaluator_operations
 from . import geometry_nodes_operations
+from . import movable_structure_operations
 
 
 def _object(name: str) -> bpy.types.Object:
@@ -422,6 +423,86 @@ def _op_inspect_active_selection(_params: dict[str, Any]) -> dict[str, Any]:
     active = bpy.context.view_layer.objects.active
     return {"active_object": active.name if active else None, "active_type": active.type if active else None, "selected_objects": [obj.name for obj in bpy.context.selected_objects]}
 
+def _op_prepare_movable_structure(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous = movable_structure_operations.prepare(params)
+    _record_undo("prepare movable structure", lambda: movable_structure_operations.restore_metadata(params["object_name"], previous))
+    return result
+
+def _op_reset_structure(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous = movable_structure_operations.reset(params)
+    _record_undo("reset movable structure", lambda: movable_structure_operations.restore_metadata(params["object_name"], previous))
+    return result
+
+def _op_bend_curve_part(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous = movable_structure_operations.bend_curve_part(params)
+    _record_undo("bend curve part", lambda: movable_structure_operations.restore_curve_state(params["object_name"], previous))
+    return result
+
+def _op_move_curve_part(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous = movable_structure_operations.move_curve_part(params)
+    _record_undo("move curve part", lambda: movable_structure_operations.restore_curve_state(params["object_name"], previous))
+    return result
+
+def _op_twist_curve_part(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous = movable_structure_operations.twist_curve_part(params)
+    _record_undo("twist curve part", lambda: movable_structure_operations.restore_curve_state(params["object_name"], previous))
+    return result
+
+def _op_reset_curve_part(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous = movable_structure_operations.reset_curve_part(params)
+    _record_undo("reset curve part", lambda: movable_structure_operations.restore_curve_state(params["object_name"], previous))
+    return result
+
+def _op_prepare_mesh_extension(params: dict[str, Any]) -> dict[str, Any]:
+    result, copy_name = movable_structure_operations.prepare_mesh_extension(params)
+    _record_undo("prepare mesh extension", lambda: movable_structure_operations.remove_mesh_copy(copy_name))
+    return result
+
+def _op_prepare_selected_mesh_extension(params: dict[str, Any]) -> dict[str, Any]:
+    result, copy_name = movable_structure_operations.prepare_selected_mesh_extension(params)
+    _record_undo("prepare selected mesh extension", lambda: movable_structure_operations.remove_mesh_copy(copy_name))
+    return result
+
+def _op_bend_mesh_part(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous = movable_structure_operations.bend_mesh_part(params)
+    _record_undo("bend mesh part", lambda: movable_structure_operations.restore_mesh_part(params["object_name"], previous))
+    return result
+
+def _op_reset_mesh_part(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous = movable_structure_operations.reset_mesh_part(params)
+    _record_undo("reset mesh part", lambda: movable_structure_operations.restore_mesh_part(params["object_name"], previous))
+    return result
+
+def _op_create_v8_session(params: dict[str, Any]) -> dict[str, Any]:
+    result, session_name = movable_structure_operations.create_v8_session(params)
+    _record_undo("create V8.2 session", lambda: movable_structure_operations.discard_v8_session({"session_name": session_name}))
+    return result
+
+def _op_reset_v8_session(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous = movable_structure_operations.reset_v8_session(params)
+    _record_undo("reset V8.2 session", lambda: movable_structure_operations.restore_v8_session_pose(params["session_name"], previous))
+    return result
+
+def _op_pose_v8_control(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous = movable_structure_operations.pose_v8_control(params)
+    _record_undo("pose V8.2 control", lambda: movable_structure_operations.restore_v8_session_pose(params["session_name"], previous))
+    return result
+
+def _op_create_v8_auto_rig(params: dict[str, Any]) -> dict[str, Any]:
+    result, rig_name = movable_structure_operations.create_v8_auto_rig(params)
+    _record_undo("create V8.3 automatic rig", lambda: bpy.data.objects.remove(bpy.data.objects[rig_name], do_unlink=True) if bpy.data.objects.get(rig_name) else None)
+    return result
+
+def _op_create_v8_independent_handles(params: dict[str, Any]) -> dict[str, Any]:
+    result, rig_name = movable_structure_operations.create_v8_independent_handles(params)
+    _record_undo("create V8.3 independent handles", lambda: bpy.data.objects.remove(bpy.data.objects[rig_name], do_unlink=True) if bpy.data.objects.get(rig_name) else None)
+    return result
+
+def _op_accept_v8_session(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous_name = movable_structure_operations.accept_v8_session(params)
+    _record_undo("accept V8.2 session", lambda: movable_structure_operations.restore_v8_session_acceptance(params["session_name"], previous_name))
+    return result
+
 
 Operation = Callable[[dict[str, Any]], dict[str, Any]]
 OPERATIONS: dict[str, Operation] = {
@@ -431,6 +512,22 @@ OPERATIONS: dict[str, Operation] = {
     "inspect_active_selection": _op_inspect_active_selection,
     "evaluate_mesh": evaluator_operations.evaluate_mesh,
     "evaluate_asset_readiness": evaluator_operations.evaluate_asset_readiness,
+    "inspect_rigging_structure": evaluator_operations.inspect_rigging_structure,
+    "inspect_movable_structure": movable_structure_operations.inspect, "prepare_movable_structure": _op_prepare_movable_structure,
+    "list_movable_parts": movable_structure_operations.list_parts, "get_part_state": movable_structure_operations.get_part_state,
+    "reset_structure": _op_reset_structure,
+    "bend_curve_part": _op_bend_curve_part, "reset_curve_part": _op_reset_curve_part,
+    "move_curve_part": _op_move_curve_part, "twist_curve_part": _op_twist_curve_part,
+    "propose_mesh_extension": movable_structure_operations.propose_mesh_extension,
+    "prepare_selected_mesh_extension": _op_prepare_selected_mesh_extension,
+    "prepare_mesh_extension": _op_prepare_mesh_extension, "bend_mesh_part": _op_bend_mesh_part, "reset_mesh_part": _op_reset_mesh_part,
+    "create_v8_session": _op_create_v8_session, "inspect_v8_session": movable_structure_operations.inspect_v8_session,
+    "reset_v8_session": _op_reset_v8_session, "accept_v8_session": _op_accept_v8_session,
+    "pose_v8_control": _op_pose_v8_control,
+    "create_v8_auto_rig": _op_create_v8_auto_rig,
+    "create_v8_independent_handles": _op_create_v8_independent_handles,
+    "propose_v8_photo_pose": movable_structure_operations.propose_v8_photo_pose,
+    "discard_v8_session": movable_structure_operations.discard_v8_session,
     "evaluate_spatial": evaluator_operations.evaluate_spatial,
     "evaluate_tubular": evaluator_operations.evaluate_tubular,
     "evaluate_penetration": evaluator_operations.evaluate_penetration,
@@ -455,6 +552,8 @@ OPERATIONS: dict[str, Operation] = {
     "set_metallic": lambda params: mesh_operations.set_material_scalar(params, "Metallic", "metallic"),
     "set_alpha": lambda params: mesh_operations.set_material_scalar(params, "Alpha", "alpha"),
     "add_modifier": mesh_operations.add_modifier,
+    "solidify_mesh": mesh_operations.solidify_mesh,
+    "make_mesh_solid": mesh_operations.make_mesh_solid,
     "set_modifier_parameter": mesh_operations.set_modifier_parameter,
     "remove_modifier": mesh_operations.remove_modifier,
     "apply_modifier": mesh_operations.apply_modifier,

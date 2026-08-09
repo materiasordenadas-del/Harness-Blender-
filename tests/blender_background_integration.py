@@ -29,6 +29,15 @@ def assert_close(actual, expected, tolerance=1e-6):
             raise AssertionError((actual, expected))
 
 
+def evaluated_coordinate(obj, vertex_index):
+    evaluated = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    mesh = evaluated.to_mesh()
+    try:
+        return list(mesh.vertices[vertex_index].co)
+    finally:
+        evaluated.to_mesh_clear()
+
+
 def main() -> None:
     bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.context.preferences.edit.use_global_undo = True
@@ -168,6 +177,98 @@ def main() -> None:
     tubular = dispatch_operation("evaluate_tubular", {"object_name": "V1_Background_Curve", "spline_index": 0})
     assert tubular["point_count"] == 4
     assert tubular["maximum_thickness"] >= tubular["minimum_thickness"]
+    movable_before = dispatch_operation("inspect_movable_structure", {"object_name": "V1_Background_Curve"})
+    assert movable_before["prepared"] is False
+    movable = dispatch_operation("prepare_movable_structure", {"object_name": "V1_Background_Curve", "mode": "curve_guided"})
+    assert movable["prepared"] is True and movable["parts"][1]["name"] == "Process_01"
+    assert dispatch_operation("list_movable_parts", {"object_name": "V1_Background_Curve"})["prepared"] is True
+    assert dispatch_operation("get_part_state", {"object_name": "V1_Background_Curve", "part_name": "Process_01"})["part"]["state"] == "neutral"
+    curve_base = list(bpy.data.objects["V1_Background_Curve"].data.splines[0].bezier_points[0].co)
+    curve_tip = list(bpy.data.objects["V1_Background_Curve"].data.splines[0].bezier_points[-1].co)
+    curve_tip_tilt = bpy.data.objects["V1_Background_Curve"].data.splines[0].bezier_points[-1].tilt
+    bent = dispatch_operation("bend_curve_part", {"object_name": "V1_Background_Curve", "part_name": "Process_01", "angle_degrees": -30})
+    assert bent["base_protected"] is True
+    assert_close(list(bpy.data.objects["V1_Background_Curve"].data.splines[0].bezier_points[0].co), curve_base)
+    assert list(bpy.data.objects["V1_Background_Curve"].data.splines[0].bezier_points[-1].co) != curve_tip
+    moved = dispatch_operation("move_curve_part", {"object_name": "V1_Background_Curve", "part_name": "Process_01", "offset": [0, 1, 0]})
+    assert moved["base_protected"] is True
+    twisted = dispatch_operation("twist_curve_part", {"object_name": "V1_Background_Curve", "part_name": "Process_01", "angle_degrees": 45})
+    assert twisted["base_protected"] is True
+    assert bpy.data.objects["V1_Background_Curve"].data.splines[0].bezier_points[-1].tilt != curve_tip_tilt
+    assert dispatch_operation("reset_curve_part", {"object_name": "V1_Background_Curve", "part_name": "Process_01"})["reset"] is True
+    assert_close(list(bpy.data.objects["V1_Background_Curve"].data.splines[0].bezier_points[-1].co), curve_tip)
+    assert_close([bpy.data.objects["V1_Background_Curve"].data.splines[0].bezier_points[-1].tilt], [curve_tip_tilt])
+    dispatch_operation("undo", {})  # restore the pose that existed before reset
+    dispatch_operation("undo", {})  # undo twist
+    assert_close([bpy.data.objects["V1_Background_Curve"].data.splines[0].bezier_points[-1].tilt], [curve_tip_tilt])
+    dispatch_operation("undo", {})  # undo move
+    dispatch_operation("undo", {})  # undo bend
+    dispatch_operation("undo", {})  # undo preparation
+    assert dispatch_operation("inspect_movable_structure", {"object_name": "V1_Background_Curve"})["prepared"] is False
+
+    v8_data = bpy.data.meshes.new("V8_Mesh_Source_Data")
+    v8_data.from_pydata([(0, 0, 0), (1, 0, 0), (2, 0, 1), (3, 0, 1)], [(0, 1), (1, 2), (2, 3)], [])
+    v8_source = bpy.data.objects.new("V8_Mesh_Source", v8_data)
+    bpy.context.scene.collection.objects.link(v8_source)
+    v8_source.name = "V8_Mesh_Source"
+    source_coordinates = [list(vertex.co) for vertex in v8_source.data.vertices]
+    for vertex in v8_source.data.vertices: vertex.select = vertex.index >= 1
+    prepared_mesh = dispatch_operation("prepare_selected_mesh_extension", {
+        "object_name": v8_source.name, "part_name": "Process_01",
+    })
+    v8_copy = bpy.data.objects[prepared_mesh["copy_object"]]
+    assert prepared_mesh["source_unchanged"] is True
+    assert prepared_mesh["transition_vertex_count"] >= 0
+    assert [list(vertex.co) for vertex in v8_source.data.vertices] == source_coordinates
+    copy_base = evaluated_coordinate(v8_copy, 1)
+    copy_tip = evaluated_coordinate(v8_copy, 3)
+    bent_mesh = dispatch_operation("bend_mesh_part", {"object_name": v8_copy.name, "angle_degrees": 45, "bend_axis": "x"})
+    assert bent_mesh["base_protected"] is True and bent_mesh["source_unchanged"] is True
+    assert bent_mesh["bend_axis"] == "x"
+    assert bent_mesh["maximum_edge_stretch"] <= 1.5
+    assert_close(evaluated_coordinate(v8_copy, 1), copy_base)
+    assert evaluated_coordinate(v8_copy, 3) != copy_tip
+    assert [list(vertex.co) for vertex in v8_source.data.vertices] == source_coordinates
+    assert dispatch_operation("reset_mesh_part", {"object_name": v8_copy.name})["reset"] is True
+    assert_close(evaluated_coordinate(v8_copy, 3), copy_tip)
+    try:
+        dispatch_operation("bend_mesh_part", {"object_name": v8_copy.name, "angle_degrees": 180})
+        raise AssertionError("unsafe mesh bend was not blocked")
+    except ValueError as exc:
+        assert "mesh bends are limited" in str(exc)
+    assert_close(evaluated_coordinate(v8_copy, 3), copy_tip)
+    dispatch_operation("undo", {})  # undo reset
+    dispatch_operation("undo", {})  # undo bend
+    assert_close(evaluated_coordinate(v8_copy, 3), copy_tip)
+    dispatch_operation("undo", {})  # remove temporary copy
+    assert bpy.data.objects.get(prepared_mesh["copy_object"]) is None
+
+    bpy.ops.object.select_all(action="DESELECT")
+    v8_source.select_set(True); bpy.context.view_layer.objects.active = v8_source
+    v8_session = dispatch_operation("create_v8_session", {"session_name": "Background"})
+    assert v8_session["state"] == "preview" and v8_session["source_unchanged"] is True
+    assert len(v8_session["entries"]) == 1
+    session_entry = v8_session["entries"][0]
+    session_copy = bpy.data.objects[session_entry["copy_object"]]
+    session_armature = bpy.data.objects[session_entry["armature_object"]]
+    assert session_copy.data != v8_source.data and session_copy.find_armature() == session_armature
+    auto_rig = dispatch_operation("create_v8_auto_rig", {"session_name": "Background", "copy_object": session_copy.name, "bone_count": 3})
+    assert auto_rig["rig_mode"] == "automatic_chain" and len(auto_rig["control_bones"]) == 3
+    handles = dispatch_operation("create_v8_independent_handles", {"session_name": "Background", "copy_object": session_copy.name})
+    assert handles["rig_mode"] == "independent_handles" and len(handles["control_bones"]) == 4
+    session_entry = dispatch_operation("inspect_v8_session", {"session_name": "Background"})["entries"][0]
+    session_armature = bpy.data.objects[session_entry["armature_object"]]
+    source_coordinates = [list(vertex.co) for vertex in v8_source.data.vertices]
+    dispatch_operation("pose_v8_control", {"session_name": "Background", "copy_object": session_copy.name, "control_bone": session_entry["control_bones"][-1], "location": [0, 0, 0], "rotation_degrees": [0, 0, 25]})
+    assert evaluated_coordinate(session_copy, 3) != evaluated_coordinate(v8_source, 3)
+    assert [list(vertex.co) for vertex in v8_source.data.vertices] == source_coordinates
+    assert dispatch_operation("reset_v8_session", {"session_name": "Background"})["reset"] is True
+    assert_close(evaluated_coordinate(session_copy, 3), evaluated_coordinate(v8_source, 3))
+    assert dispatch_operation("accept_v8_session", {"session_name": "Background"})["accepted"] is True
+    assert dispatch_operation("inspect_v8_session", {"session_name": "Background"})["state"] == "accepted"
+    v8_discard = dispatch_operation("create_v8_session", {"session_name": "Discard", "object_names": [v8_source.name]})
+    assert dispatch_operation("discard_v8_session", {"session_name": "Discard"})["discarded"] is True
+    assert bpy.data.objects.get(v8_discard["entries"][0]["copy_object"]) is None
 
     bpy.ops.mesh.primitive_cube_add()
     merge_mesh = bpy.context.object
@@ -203,6 +304,10 @@ def main() -> None:
     assert asset_readiness["status"] == "needs_review"
     assert asset_readiness["blockers"] == []
     assert "materials" in asset_readiness["needs_review"]
+    rigging_structure = dispatch_operation("inspect_rigging_structure", {"object_name": evaluated_mesh.name})
+    assert rigging_structure["object_type"] == "MESH"
+    assert rigging_structure["connected_components"] == 1
+    assert rigging_structure["bone_count"] == 0
     uv_report = dispatch_operation("inspect_uv", {"object_name": evaluated_mesh.name})
     assert uv_report["has_uv"] is True
     assert uv_report["active_layer"] is not None
@@ -229,6 +334,21 @@ def main() -> None:
     assert sculpted["vertex_indices"] == [0, 1]
     dispatch_operation("undo", {})
     assert [tuple(vertex.co) for vertex in evaluated_mesh.data.vertices] == before_sculpt
+
+    bpy.ops.mesh.primitive_plane_add(size=2, location=(8, 0, 0))
+    solidify_surface = bpy.context.object
+    solidify_surface.name = "V7_Solidify_Surface"
+    solidified = dispatch_operation("solidify_mesh", {"object_name": solidify_surface.name, "thickness": 0.2, "fill_rim": True})
+    assert solidified["applied"] is False
+    assert solidify_surface.modifiers[solidified["modifier_name"]].use_rim is True
+    dispatch_operation("undo", {})
+    assert not solidify_surface.modifiers
+    solid_copy = dispatch_operation("make_mesh_solid", {"object_name": solidify_surface.name, "output_name": "V7_Solidified_Copy", "thickness": 0.2, "voxel_size": 0.1})
+    assert solid_copy["source_object"] == solidify_surface.name
+    assert solid_copy["is_closed_manifold"] is True
+    assert bpy.data.objects.get("V7_Solidified_Copy") is not None
+    dispatch_operation("undo", {})
+    assert bpy.data.objects.get("V7_Solidified_Copy") is None
 
     bpy.ops.mesh.primitive_cube_add(size=2, location=(4, 0, 0))
     target_mesh = bpy.context.object
