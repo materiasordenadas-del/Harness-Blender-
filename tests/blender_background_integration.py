@@ -252,8 +252,14 @@ def main() -> None:
     session_copy = bpy.data.objects[session_entry["copy_object"]]
     session_armature = bpy.data.objects[session_entry["armature_object"]]
     assert session_copy.data != v8_source.data and session_copy.find_armature() == session_armature
+    auto_rig = dispatch_operation("create_v8_auto_rig", {"session_name": "Background", "copy_object": session_copy.name, "bone_count": 3})
+    assert auto_rig["rig_mode"] == "automatic_chain" and len(auto_rig["control_bones"]) == 3
+    handles = dispatch_operation("create_v8_independent_handles", {"session_name": "Background", "copy_object": session_copy.name})
+    assert handles["rig_mode"] == "independent_handles" and len(handles["control_bones"]) == 4
+    session_entry = dispatch_operation("inspect_v8_session", {"session_name": "Background"})["entries"][0]
+    session_armature = bpy.data.objects[session_entry["armature_object"]]
     source_coordinates = [list(vertex.co) for vertex in v8_source.data.vertices]
-    dispatch_operation("pose_v8_control", {"session_name": "Background", "copy_object": session_copy.name, "location": [0.25, 0, 0], "rotation_degrees": [0, 0, 0]})
+    dispatch_operation("pose_v8_control", {"session_name": "Background", "copy_object": session_copy.name, "control_bone": session_entry["control_bones"][-1], "location": [0, 0, 0], "rotation_degrees": [0, 0, 25]})
     assert evaluated_coordinate(session_copy, 3) != evaluated_coordinate(v8_source, 3)
     assert [list(vertex.co) for vertex in v8_source.data.vertices] == source_coordinates
     assert dispatch_operation("reset_v8_session", {"session_name": "Background"})["reset"] is True

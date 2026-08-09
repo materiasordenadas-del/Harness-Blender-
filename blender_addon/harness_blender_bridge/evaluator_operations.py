@@ -38,6 +38,7 @@ def evaluate_mesh(params: dict[str, Any]) -> dict[str, Any]:
     bm = bmesh.new()
     try:
         bm.from_mesh(obj.data)
+        bm.faces.ensure_lookup_table()
         bm.normal_update()
         boundary = sum(edge.is_boundary for edge in bm.edges)
         loose_edges = sum(not edge.link_faces for edge in bm.edges)

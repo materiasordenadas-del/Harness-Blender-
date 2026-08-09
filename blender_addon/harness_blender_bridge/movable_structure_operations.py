@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import heapq
 import math
 from typing import Any
 import bpy
@@ -14,6 +15,7 @@ _MESH_SOURCE_KEY = "harness_mesh_source_v8"
 _MESH_PART_KEY = "harness_mesh_part_v8"
 _MAX_SAFE_EDGE_STRETCH = 1.5
 _MAX_SAFE_MESH_BEND_DEGREES = 90.0
+_MAX_SAFE_HANDLE_STRETCH = 1.8
 _WEIGHT_FALLOFF_RINGS = 4
 _WEIGHT_FALLOFF_FACTOR = 0.55
 _V8_SESSION_KEY = "harness_v8_session"
@@ -484,6 +486,19 @@ def _object_axis(obj: bpy.types.Object) -> Vector:
     return vector
 
 
+def _deselect_armature_bones(armature: bpy.types.Object) -> None:
+    prior_active = bpy.context.view_layer.objects.active; prior_selected = tuple(bpy.context.selected_objects)
+    try:
+        bpy.ops.object.select_all(action="DESELECT"); armature.select_set(True); bpy.context.view_layer.objects.active = armature
+        bpy.ops.object.mode_set(mode="POSE"); bpy.ops.pose.select_all(action="DESELECT"); bpy.ops.object.mode_set(mode="OBJECT")
+    finally:
+        if armature.mode != "OBJECT": bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.ops.object.select_all(action="DESELECT")
+        for item in prior_selected:
+            if item.name in bpy.data.objects: item.select_set(True)
+        if prior_active is not None and prior_active.name in bpy.data.objects: bpy.context.view_layer.objects.active = prior_active
+
+
 def _create_session_rig(copy: bpy.types.Object, collection: bpy.types.Collection, session_name: str) -> tuple[str, str]:
     data = bpy.data.armatures.new(f"{copy.name}_V8_Rig_Data")
     armature = bpy.data.objects.new(f"{copy.name}_V8_Rig", data)
@@ -559,19 +574,22 @@ def _pose_snapshot(payload: dict[str, Any]) -> dict[str, list[float]]:
     snapshot: dict[str, list[float]] = {}
     for entry in payload["entries"]:
         armature = bpy.data.objects.get(entry["armature_object"])
-        control = armature.pose.bones.get(entry["control_bone"]) if armature and armature.type == "ARMATURE" else None
-        if control is not None:
-            snapshot[armature.name] = [float(value) for row in control.matrix_basis for value in row]
+        if armature is None or armature.type != "ARMATURE": continue
+        for bone_name in entry.get("control_bones", [entry["control_bone"]]):
+            control = armature.pose.bones.get(bone_name)
+            if control is not None:
+                snapshot[f"{armature.name}\0{bone_name}"] = [float(value) for row in control.matrix_basis for value in row]
     return snapshot
 
 
 def restore_v8_session_pose(session_name: str, snapshot: dict[str, list[float]]) -> None:
     collection = bpy.data.collections.get(_session_collection_name(session_name))
     if collection is None: return
-    for armature_name, values in snapshot.items():
+    for key, values in snapshot.items():
+        armature_name, bone_name = key.split("\0", 1)
         armature = bpy.data.objects.get(armature_name)
         if armature is not None and armature.type == "ARMATURE":
-            armature.pose.bones["V8_CTRL_Object"].matrix_basis = Matrix((values[0:4], values[4:8], values[8:12], values[12:16]))
+            armature.pose.bones[bone_name].matrix_basis = Matrix((values[0:4], values[4:8], values[8:12], values[12:16]))
     bpy.context.view_layer.update()
 
 
@@ -581,7 +599,8 @@ def reset_v8_session(params: dict[str, Any]) -> tuple[dict[str, Any], dict[str, 
     for entry in payload["entries"]:
         armature = bpy.data.objects.get(entry["armature_object"])
         if armature is not None and armature.type == "ARMATURE":
-            armature.pose.bones[entry["control_bone"]].matrix_basis.identity()
+            for bone_name in entry.get("control_bones", [entry["control_bone"]]):
+                armature.pose.bones[bone_name].matrix_basis.identity()
     bpy.context.view_layer.update()
     return {"session": payload["session"], "reset": True, "source_unchanged": True}, previous
 
@@ -592,14 +611,175 @@ def pose_v8_control(params: dict[str, Any]) -> tuple[dict[str, Any], dict[str, l
     if entry is None: raise ValueError("copy_object does not belong to this V8 session")
     armature = bpy.data.objects.get(entry["armature_object"])
     if armature is None or armature.type != "ARMATURE": raise ValueError("V8 session control armature is missing")
-    control = armature.pose.bones.get(entry["control_bone"])
+    bone_name = params.get("control_bone", entry["control_bone"])
+    if bone_name not in entry.get("control_bones", [entry["control_bone"]]): raise ValueError("control_bone does not belong to this V8 rig")
+    control = armature.pose.bones.get(bone_name)
     if control is None: raise ValueError("V8 session control bone is missing")
     previous = _pose_snapshot(payload)
+    copy = bpy.data.objects.get(entry["copy_object"])
+    if copy is None or copy.type != "MESH": raise ValueError("V8 session mesh copy is missing")
+    before = _edge_lengths(copy.data)
     control.rotation_mode = "XYZ"
     control.location = params["location"]
     control.rotation_euler = [math.radians(value) for value in params["rotation_degrees"]]
     bpy.context.view_layer.update()
-    return {"session": payload["session"], "copy_object": entry["copy_object"], "control_bone": entry["control_bone"], "location": params["location"], "rotation_degrees": params["rotation_degrees"], "source_unchanged": True}, previous
+    stretch = _maximum_edge_stretch(before, _evaluated_edge_lengths(copy))
+    if stretch > _MAX_SAFE_HANDLE_STRETCH:
+        restore_v8_session_pose(payload["session"], previous)
+        raise ValueError(f"blocked: handle pose would stretch an edge {stretch:.2f}x (limit {_MAX_SAFE_HANDLE_STRETCH:.2f}x)")
+    return {"session": payload["session"], "copy_object": entry["copy_object"], "control_bone": bone_name, "location": params["location"], "rotation_degrees": params["rotation_degrees"], "maximum_edge_stretch": stretch, "source_unchanged": True}, previous
+
+
+def propose_v8_photo_pose(params: dict[str, Any]) -> dict[str, Any]:
+    """Combine annotated front and side image offsets into a reversible 3D pose proposal."""
+    collection = _session_collection(params["session_name"]); payload = _session_payload(collection)
+    entry = next((item for item in payload["entries"] if item["copy_object"] == params["copy_object"]), None)
+    if entry is None or params["control_bone"] not in entry.get("control_bones", []): raise ValueError("photo proposal must target an existing V8 handle")
+    front, side = params["front_offset"], params["side_offset"]
+    # Front supplies X/Z, side supplies Y/Z.  Average Z so contradictory
+    # annotations are visible to the caller rather than silently ignored.
+    proposal = {"control_bone": params["control_bone"], "location": [front[0], side[0], (front[1] + side[1]) / 2.0], "rotation_degrees": [0.0, 0.0, 0.0]}
+    payload["photo_proposal"] = proposal; collection[_V8_SESSION_KEY] = json.dumps(payload, separators=(",", ":"))
+    return {"session": payload["session"], "copy_object": entry["copy_object"], "front_offset": front, "side_offset": side, "proposal": proposal, "requires_acceptance": True, "source_unchanged": True}
+
+
+def _create_auto_chain_rig(copy: bpy.types.Object, collection: bpy.types.Collection, bone_count: int) -> tuple[str, list[str]]:
+    vertices = copy.data.vertices
+    adjacency: list[list[tuple[int, float]]] = [[] for _ in vertices]
+    for edge in copy.data.edges:
+        first, second = edge.vertices
+        length = (vertices[first].co - vertices[second].co).length
+        if length > 1e-9:
+            adjacency[first].append((second, length)); adjacency[second].append((first, length))
+    if not any(adjacency): raise ValueError("mesh has no usable connected path for an automatic V8.3 chain")
+    def farthest(start: int) -> tuple[int, dict[int, int | None], dict[int, float]]:
+        distances = {start: 0.0}; parents: dict[int, int | None] = {start: None}; queue = [(0.0, start)]
+        while queue:
+            distance, current = heapq.heappop(queue)
+            if distance != distances[current]: continue
+            for neighbor, cost in adjacency[current]:
+                candidate = distance + cost
+                if candidate < distances.get(neighbor, float("inf")):
+                    distances[neighbor] = candidate; parents[neighbor] = current; heapq.heappush(queue, (candidate, neighbor))
+        end = max(distances, key=distances.get)
+        return end, parents, distances
+    seed = next(index for index, links in enumerate(adjacency) if links)
+    first, _, _ = farthest(seed); last, parents, distances = farthest(first)
+    if distances[last] <= 1e-6: raise ValueError("mesh path is too short for an automatic V8.3 chain")
+    path_indices = [last]
+    while path_indices[-1] != first:
+        parent = parents[path_indices[-1]]
+        if parent is None: raise ValueError("automatic V8.3 chain could not reconstruct its mesh path")
+        path_indices.append(parent)
+    path_indices.reverse()
+    path = [vertices[index].co.copy() for index in path_indices]
+    cumulative = [0.0]
+    for first_point, second_point in zip(path, path[1:]): cumulative.append(cumulative[-1] + (second_point - first_point).length)
+    total_length = cumulative[-1]
+    def point_at(distance: float) -> Vector:
+        for index in range(1, len(cumulative)):
+            if cumulative[index] >= distance:
+                span = cumulative[index] - cumulative[index - 1]
+                factor = 0.0 if span <= 1e-9 else (distance - cumulative[index - 1]) / span
+                return path[index - 1].lerp(path[index], factor)
+        return path[-1].copy()
+    bone_points = [point_at(total_length * index / bone_count) for index in range(bone_count + 1)]
+    data = bpy.data.armatures.new(f"{copy.name}_V8_Auto_Rig_Data")
+    armature = bpy.data.objects.new(f"{copy.name}_V8_Auto_Rig", data); collection.objects.link(armature)
+    armature.matrix_world = copy.matrix_world.copy()
+    prior_active = bpy.context.view_layer.objects.active; prior_selected = tuple(bpy.context.selected_objects)
+    controls: list[str] = []
+    try:
+        bpy.ops.object.select_all(action="DESELECT"); armature.select_set(True); bpy.context.view_layer.objects.active = armature; bpy.ops.object.mode_set(mode="EDIT")
+        parent = None
+        for index in range(bone_count):
+            head = bone_points[index]; tail = bone_points[index + 1]
+            bone = data.edit_bones.new(f"V8_CTRL_{index + 1:02d}"); bone.head = head; bone.tail = tail; bone.parent = parent
+            if parent is not None: bone.use_connect = True
+            parent = bone; controls.append(bone.name)
+    finally:
+        if armature.mode != "OBJECT": bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.ops.object.select_all(action="DESELECT")
+        for item in prior_selected:
+            if item.name in bpy.data.objects: item.select_set(True)
+        if prior_active is not None and prior_active.name in bpy.data.objects: bpy.context.view_layer.objects.active = prior_active
+    for group in list(copy.vertex_groups): copy.vertex_groups.remove(group)
+    for modifier in list(copy.modifiers):
+        if modifier.type == "ARMATURE": copy.modifiers.remove(modifier)
+    centers = [(bone_points[index] + bone_points[index + 1]) * 0.5 for index in range(bone_count)]
+    for vertex in vertices:
+        distances = [max((vertex.co - point).length, 1e-6) for point in centers]
+        nearest = sorted(range(bone_count), key=lambda index: distances[index])[:2]
+        weights = [0.0] * bone_count
+        inverse = [1.0 / distances[index] for index in nearest]; total = sum(inverse)
+        for index, value in zip(nearest, inverse): weights[index] = value / total
+        for name, weight in zip(controls, weights):
+            if weight > 0.0: copy.vertex_groups.new(name=name) if copy.vertex_groups.get(name) is None else None; copy.vertex_groups[name].add([vertex.index], weight / total, "REPLACE")
+    modifier = copy.modifiers.new(name="Harness_V8_Auto_Armature", type="ARMATURE"); modifier.object = armature; modifier.use_deform_preserve_volume = True
+    armature.show_in_front = True; armature.display_type = "WIRE"
+    _deselect_armature_bones(armature)
+    return armature.name, controls
+
+
+def create_v8_auto_rig(params: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    collection = _session_collection(params["session_name"]); payload = _session_payload(collection)
+    entry = next((item for item in payload["entries"] if item["copy_object"] == params["copy_object"]), None)
+    if entry is None: raise ValueError("copy_object does not belong to this V8 session")
+    old_armature = bpy.data.objects.get(entry["armature_object"])
+    if old_armature is not None: bpy.data.objects.remove(old_armature, do_unlink=True)
+    rig_name, controls = _create_auto_chain_rig(bpy.data.objects[entry["copy_object"]], collection, params["bone_count"])
+    entry.update({"armature_object": rig_name, "control_bone": controls[0], "control_bones": controls, "rig_mode": "automatic_chain"})
+    collection[_V8_SESSION_KEY] = json.dumps(payload, separators=(",", ":"))
+    return {"session": payload["session"], "copy_object": entry["copy_object"], "armature_object": rig_name, "control_bones": controls, "rig_mode": "automatic_chain", "source_unchanged": True}, rig_name
+
+
+def create_v8_independent_handles(params: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    collection = _session_collection(params["session_name"]); payload = _session_payload(collection)
+    entry = next((item for item in payload["entries"] if item["copy_object"] == params["copy_object"]), None)
+    if entry is None: raise ValueError("copy_object does not belong to this V8 session")
+    old_armature = bpy.data.objects.get(entry["armature_object"])
+    if old_armature is None or old_armature.type != "ARMATURE": raise ValueError("create an automatic V8.3 chain before independent handles")
+    old_bones = list(old_armature.data.bones)
+    if len(old_bones) < 2: raise ValueError("automatic V8.3 chain needs at least two bones")
+    anchors = [old_bones[0].head_local.copy()] + [bone.tail_local.copy() for bone in old_bones]
+    copy = bpy.data.objects[entry["copy_object"]]
+    data = bpy.data.armatures.new(f"{copy.name}_V8_Handles_Rig_Data")
+    armature = bpy.data.objects.new(f"{copy.name}_V8_Handles_Rig", data); collection.objects.link(armature)
+    armature.matrix_world = copy.matrix_world.copy()
+    prior_active = bpy.context.view_layer.objects.active; prior_selected = tuple(bpy.context.selected_objects); controls: list[str] = []
+    try:
+        bpy.ops.object.select_all(action="DESELECT"); armature.select_set(True); bpy.context.view_layer.objects.active = armature; bpy.ops.object.mode_set(mode="EDIT")
+        for index, anchor in enumerate(anchors):
+            direction = (anchors[min(index + 1, len(anchors) - 1)] - anchors[max(index - 1, 0)]).normalized()
+            if direction.length <= 1e-6: direction = Vector((0.0, 0.0, 0.05))
+            bone = data.edit_bones.new(f"V8_HANDLE_{index + 1:02d}"); bone.head = anchor; bone.tail = anchor + direction * max(direction.length * 0.2, 0.03)
+            controls.append(bone.name)
+    finally:
+        if armature.mode != "OBJECT": bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.ops.object.select_all(action="DESELECT")
+        for item in prior_selected:
+            if item.name in bpy.data.objects: item.select_set(True)
+        if prior_active is not None and prior_active.name in bpy.data.objects: bpy.context.view_layer.objects.active = prior_active
+    for group in list(copy.vertex_groups): copy.vertex_groups.remove(group)
+    for modifier in list(copy.modifiers):
+        if modifier.type == "ARMATURE": copy.modifiers.remove(modifier)
+    for name in controls: copy.vertex_groups.new(name=name)
+    for vertex in copy.data.vertices:
+        # Each handle remains independent, while the surface blends only between
+        # its two closest handles.  This prevents the hard seams produced by a
+        # one-handle-per-vertex assignment and behaves like a local elbow.
+        distances = [max((vertex.co - anchor).length, 1e-6) for anchor in anchors]
+        nearest = sorted(range(len(anchors)), key=lambda index: distances[index])[:2]
+        inverse = [1.0 / distances[index] for index in nearest]; total = sum(inverse)
+        for index, value in zip(nearest, inverse):
+            copy.vertex_groups[controls[index]].add([vertex.index], value / total, "REPLACE")
+    modifier = copy.modifiers.new(name="Harness_V8_Independent_Handles", type="ARMATURE"); modifier.object = armature; modifier.use_deform_preserve_volume = True
+    armature.show_in_front = True; armature.display_type = "WIRE"
+    _deselect_armature_bones(armature)
+    bpy.data.objects.remove(old_armature, do_unlink=True)
+    entry.update({"armature_object": armature.name, "control_bone": controls[0], "control_bones": controls, "rig_mode": "independent_handles"})
+    collection[_V8_SESSION_KEY] = json.dumps(payload, separators=(",", ":"))
+    return {"session": payload["session"], "copy_object": copy.name, "armature_object": armature.name, "control_bones": controls, "rig_mode": "independent_handles", "independent": True, "source_unchanged": True}, armature.name
 
 
 def accept_v8_session(params: dict[str, Any]) -> tuple[dict[str, Any], str]:

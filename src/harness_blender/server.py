@@ -369,6 +369,16 @@ def pose_v8_control(session_name: str, copy_object: str, location: list[float] |
     return _run("pose_v8_control", {"session_name": session_name, "copy_object": copy_object, "location": location or [0, 0, 0], "rotation_degrees": rotation_degrees or [0, 0, 0]})
 
 @mcp.tool()
+def create_v8_auto_rig(session_name: str, copy_object: str, bone_count: int = 4) -> str:
+    """Create a local automatic V8.3 chain with 2-16 bones; it yields one independent handle per joint."""
+    return _run("create_v8_auto_rig", {"session_name": session_name, "copy_object": copy_object, "bone_count": bone_count})
+
+@mcp.tool()
+def create_v8_independent_handles(session_name: str, copy_object: str) -> str:
+    """Replace a V8.3 chain with independent local handles; moving one handle does not move the other handles."""
+    return _run("create_v8_independent_handles", {"session_name": session_name, "copy_object": copy_object})
+
+@mcp.tool()
 def accept_v8_session(session_name: str) -> str:
     """Keep the V8.2 preview copy as an accepted editable result; the source remains unchanged."""
     return _run("accept_v8_session", {"session_name": session_name})

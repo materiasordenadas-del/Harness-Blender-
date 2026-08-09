@@ -28,6 +28,9 @@ ALLOWED_OPERATIONS = {
     "propose_mesh_extension", "prepare_selected_mesh_extension", "prepare_mesh_extension", "bend_mesh_part", "reset_mesh_part",
     "create_v8_session", "inspect_v8_session", "reset_v8_session", "accept_v8_session", "discard_v8_session",
     "pose_v8_control",
+    "create_v8_auto_rig",
+    "create_v8_independent_handles",
+    "propose_v8_photo_pose",
     "evaluate_spatial",
     "evaluate_tubular",
     "evaluate_penetration",
@@ -374,10 +377,29 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
         return {"session_name": _name(params["session_name"], "session_name")}
 
     if operation == "pose_v8_control":
-        allowed = {"session_name", "copy_object", "location", "rotation_degrees"}
+        allowed = {"session_name", "copy_object", "control_bone", "location", "rotation_degrees"}
         _reject_unknown_keys(params, allowed, where="pose_v8_control parameter")
         if not {"session_name", "copy_object"}.issubset(params): raise ProtocolError("pose_v8_control requires session_name and copy_object")
-        return {"session_name": _name(params["session_name"], "session_name"), "copy_object": _name(params["copy_object"], "copy_object"), "location": _vec3(params.get("location", [0, 0, 0]), "location"), "rotation_degrees": _vec3(params.get("rotation_degrees", [0, 0, 0]), "rotation_degrees")}
+        result = {"session_name": _name(params["session_name"], "session_name"), "copy_object": _name(params["copy_object"], "copy_object"), "location": _vec3(params.get("location", [0, 0, 0]), "location"), "rotation_degrees": _vec3(params.get("rotation_degrees", [0, 0, 0]), "rotation_degrees")}
+        if "control_bone" in params: result["control_bone"] = _name(params["control_bone"], "control_bone")
+        return result
+
+    if operation == "create_v8_auto_rig":
+        allowed = {"session_name", "copy_object", "bone_count"}; _reject_unknown_keys(params, allowed, where="create_v8_auto_rig parameter")
+        if not {"session_name", "copy_object"}.issubset(params): raise ProtocolError("create_v8_auto_rig requires session_name and copy_object")
+        count = params.get("bone_count", 4)
+        if isinstance(count, bool) or not isinstance(count, int) or not 2 <= count <= 16: raise ProtocolError("bone_count must be an integer between 2 and 16")
+        return {"session_name": _name(params["session_name"], "session_name"), "copy_object": _name(params["copy_object"], "copy_object"), "bone_count": count}
+
+    if operation == "create_v8_independent_handles":
+        _reject_unknown_keys(params, {"session_name", "copy_object"}, where="create_v8_independent_handles parameter")
+        if set(params) != {"session_name", "copy_object"}: raise ProtocolError("create_v8_independent_handles requires session_name and copy_object")
+        return {"session_name": _name(params["session_name"], "session_name"), "copy_object": _name(params["copy_object"], "copy_object")}
+
+    if operation == "propose_v8_photo_pose":
+        allowed = {"session_name", "copy_object", "control_bone", "front_offset", "side_offset"}; _reject_unknown_keys(params, allowed, where="propose_v8_photo_pose parameter")
+        if set(params) != allowed: raise ProtocolError("propose_v8_photo_pose requires two view offsets and an existing handle")
+        return {"session_name": _name(params["session_name"], "session_name"), "copy_object": _name(params["copy_object"], "copy_object"), "control_bone": _name(params["control_bone"], "control_bone"), "front_offset": _vec3([params["front_offset"][0], 0, params["front_offset"][1]], "front_offset")[:2], "side_offset": _vec3([params["side_offset"][0], 0, params["side_offset"][1]], "side_offset")[:2]}
 
     if operation == "unwrap_uv":
         allowed = {"object_name", "method", "margin"}

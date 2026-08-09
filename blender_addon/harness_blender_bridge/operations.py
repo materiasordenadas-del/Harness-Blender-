@@ -488,6 +488,16 @@ def _op_pose_v8_control(params: dict[str, Any]) -> dict[str, Any]:
     _record_undo("pose V8.2 control", lambda: movable_structure_operations.restore_v8_session_pose(params["session_name"], previous))
     return result
 
+def _op_create_v8_auto_rig(params: dict[str, Any]) -> dict[str, Any]:
+    result, rig_name = movable_structure_operations.create_v8_auto_rig(params)
+    _record_undo("create V8.3 automatic rig", lambda: bpy.data.objects.remove(bpy.data.objects[rig_name], do_unlink=True) if bpy.data.objects.get(rig_name) else None)
+    return result
+
+def _op_create_v8_independent_handles(params: dict[str, Any]) -> dict[str, Any]:
+    result, rig_name = movable_structure_operations.create_v8_independent_handles(params)
+    _record_undo("create V8.3 independent handles", lambda: bpy.data.objects.remove(bpy.data.objects[rig_name], do_unlink=True) if bpy.data.objects.get(rig_name) else None)
+    return result
+
 def _op_accept_v8_session(params: dict[str, Any]) -> dict[str, Any]:
     result, previous_name = movable_structure_operations.accept_v8_session(params)
     _record_undo("accept V8.2 session", lambda: movable_structure_operations.restore_v8_session_acceptance(params["session_name"], previous_name))
@@ -514,6 +524,9 @@ OPERATIONS: dict[str, Operation] = {
     "create_v8_session": _op_create_v8_session, "inspect_v8_session": movable_structure_operations.inspect_v8_session,
     "reset_v8_session": _op_reset_v8_session, "accept_v8_session": _op_accept_v8_session,
     "pose_v8_control": _op_pose_v8_control,
+    "create_v8_auto_rig": _op_create_v8_auto_rig,
+    "create_v8_independent_handles": _op_create_v8_independent_handles,
+    "propose_v8_photo_pose": movable_structure_operations.propose_v8_photo_pose,
     "discard_v8_session": movable_structure_operations.discard_v8_session,
     "evaluate_spatial": evaluator_operations.evaluate_spatial,
     "evaluate_tubular": evaluator_operations.evaluate_tubular,
