@@ -1,0 +1,11 @@
+{
+  "version": "0.1.0",
+  "templates": [
+    {"template_id": "enterocyte", "display_name": "Enterocito", "status": "planned"},
+    {"template_id": "collecting_duct_principal_cell", "display_name": "Célula principal del túbulo colector", "status": "planned"},
+    {"template_id": "podocyte", "display_name": "Podocito", "status": "planned"},
+    {"template_id": "neuron", "display_name": "Neurona", "status": "planned"},
+    {"template_id": "pancreatic_beta_cell", "display_name": "Célula beta pancreática", "status": "planned"},
+    {"template_id": "cardiomyocyte", "display_name": "Cardiomiocito", "status": "planned"}
+  ]
+}

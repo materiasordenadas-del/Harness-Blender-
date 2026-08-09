@@ -1,0 +1,29 @@
+{
+  "version": "0.1.0",
+  "sources": [
+    {
+      "source_id": "bioicons",
+      "name": "BioIcons",
+      "url": "https://bioicons.com/",
+      "asset_format": "SVG",
+      "license_policy": "La licencia se verifica por asset antes de importarlo.",
+      "status": "candidate"
+    },
+    {
+      "source_id": "servier_medical_art",
+      "name": "Servier Medical Art",
+      "url": "https://smart.servier.com/",
+      "asset_format": "SVG u otros formatos publicados por la fuente",
+      "license_policy": "Registrar la atribución y los cambios de cada asset CC BY 4.0.",
+      "status": "candidate"
+    },
+    {
+      "source_id": "wikimedia_commons",
+      "name": "Wikimedia Commons",
+      "url": "https://commons.wikimedia.org/",
+      "asset_format": "SVG preferido",
+      "license_policy": "La licencia se verifica por archivo antes de importarlo.",
+      "status": "candidate"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Harness Cell Asset",
+  "type": "object",
+  "required": ["asset_id", "display_name", "family", "source_id", "source_url", "license", "original_path", "original_sha256", "status"],
+  "properties": {
+    "asset_id": {"type": "string", "pattern": "^[a-z0-9_]+$"},
+    "display_name": {"type": "string", "minLength": 1},
+    "family": {"type": "string", "minLength": 1},
+    "source_id": {"type": "string", "minLength": 1},
+    "source_url": {"type": "string", "format": "uri"},
+    "license": {"enum": ["CC0-1.0", "CC-BY-4.0", "MIT"]},
+    "attribution": {"type": "string"},
+    "original_path": {"type": "string"},
+    "original_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "harness_path": {"type": "string"},
+    "derivative_of": {"type": "string"},
+    "status": {"enum": ["candidate", "approved", "imported", "normalized", "rejected"]}
+  },
+  "additionalProperties": false
+}
