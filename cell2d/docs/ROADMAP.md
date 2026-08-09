@@ -23,6 +23,8 @@ Validar el contrato visual ya creado con una escena de muestra: cámara ortográ
 
 Crear operaciones tipadas para importar un asset, crear una instancia, asignar su nombre semántico y colocarlo por dominio celular. No se aceptará Python arbitrario.
 
+Estado actual: `create_cell2d_symbol` está disponible en el bridge y crea mallas o texto 2D editables con metadatos de identidad, dominio y procedencia.
+
 ## Paso 5 — C4: dos células piloto
 
 Construir y revisar un enterocito y una célula principal del túbulo colector. El objetivo es probar anatomía polarizada, dominios y colocación de assets.

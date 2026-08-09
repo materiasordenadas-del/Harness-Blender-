@@ -13,4 +13,4 @@ Convertir únicamente planes de reconstrucción ya revisados en operaciones tipa
 
 ## Resultado de esta subfase
 
-Se genera un paquete `harness-cell2d-scene` con operaciones `create_cell2d_symbol`. La siguiente subfase implementará esta operación dentro del bridge de Blender y la validará en una escena real.
+Se genera un paquete `harness-cell2d-scene` con operaciones `create_cell2d_symbol`. El bridge de Blender ejecuta ahora esa operación como una malla o texto 2D editable dentro de la colección `Cell2D`, con material semántico y propiedades de procedencia. La siguiente subfase conectará un paquete completo a la ejecución por lote y realizará la revisión visual de una primera escena.

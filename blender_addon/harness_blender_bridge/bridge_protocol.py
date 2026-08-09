@@ -15,6 +15,21 @@ import secrets
 from typing import Any
 
 ALLOWED_PRIMITIVES = {"cube", "uv_sphere", "cylinder", "cone", "torus"}
+CELL2D_CATEGORIES = {
+    "membrane", "cytoplasm", "organelle", "ion_channel", "pump", "exchanger", "receptor",
+    "signaling_protein", "second_messenger", "ion", "vesicle", "activation_arrow",
+    "inhibition_line", "transport_arrow", "label",
+}
+CELL2D_DOMAINS = {"apical", "basal", "lateral", "membrane", "cytoplasm", "nucleus", "extracellular", "unknown"}
+CELL2D_SHAPE_FAMILIES = {
+    "double_bilayer", "filled_region", "outlined_region", "membrane_capsule", "receptor",
+    "ellipse", "circle", "arrow", "inhibition", "text",
+}
+CELL2D_MATERIALS = {
+    "background", "cytoplasm_fill", "membrane_primary", "membrane_secondary", "organelle_fill",
+    "organelle_outline", "membrane_protein", "signaling_protein", "second_messenger", "ion_primary",
+    "vesicle", "arrow", "label",
+}
 ALLOWED_OPERATIONS = {
     "ping",
     "inspect_scene",
@@ -68,6 +83,7 @@ ALLOWED_OPERATIONS = {
     "set_curve_bevel_resolution",
     "set_curve_resolution",
     "set_curve_cyclic",
+    "create_cell2d_symbol",
 }
 MAX_NAME_LENGTH = 255
 MAX_ABS_COORDINATE = 1_000_000.0
@@ -125,6 +141,26 @@ def _integer(value: Any, field: str, *, minimum: int, maximum: int) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
         raise ProtocolError(f"{field} must be an integer between {minimum} and {maximum}")
     return value
+
+
+def _hex_color(value: Any, field: str) -> str:
+    if not isinstance(value, str) or len(value) != 7 or not value.startswith("#"):
+        raise ProtocolError(f"{field} must be #RRGGBB")
+    try:
+        int(value[1:], 16)
+    except ValueError as exc:
+        raise ProtocolError(f"{field} must be #RRGGBB") from exc
+    return value.upper()
+
+
+def _bounds(value: Any) -> list[float]:
+    if not isinstance(value, list) or len(value) != 4:
+        raise ProtocolError("bounds must contain x, y, width and height")
+    x = _number(value[0], "bounds.x", minimum=-MAX_ABS_COORDINATE, maximum=MAX_ABS_COORDINATE)
+    y = _number(value[1], "bounds.y", minimum=-MAX_ABS_COORDINATE, maximum=MAX_ABS_COORDINATE)
+    width = _number(value[2], "bounds.width", minimum=0.001, maximum=MAX_ABS_SCALE)
+    height = _number(value[3], "bounds.height", minimum=0.001, maximum=MAX_ABS_SCALE)
+    return [x, y, width, height]
 
 
 def _curve_point_target(params: dict[str, Any], operation: str, value_field: str) -> dict[str, Any]:
@@ -224,6 +260,43 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
             "name": _name(params["name"], "name"),
             "location": _vec3(params.get("location", [0, 0, 0]), "location"),
             "scale": _vec3(params.get("scale", [1, 1, 1]), "scale", scale=True),
+        }
+
+    if operation == "create_cell2d_symbol":
+        allowed = {
+            "object_name", "asset_id", "visual_category", "domain", "bounds", "shape_family",
+            "material", "color", "z", "reference_id", "source_observation_id",
+        }
+        _reject_unknown_keys(params, allowed, where="create_cell2d_symbol parameter")
+        if set(params) != allowed:
+            raise ProtocolError("create_cell2d_symbol requires all declared semantic fields")
+        asset_id = params["asset_id"]
+        if asset_id is not None:
+            asset_id = _name(asset_id, "asset_id")
+        category = params["visual_category"]
+        if category not in CELL2D_CATEGORIES:
+            raise ProtocolError("visual_category is not registered for Cell2D")
+        domain = params["domain"]
+        if domain not in CELL2D_DOMAINS:
+            raise ProtocolError("domain is not registered for Cell2D")
+        shape_family = params["shape_family"]
+        if shape_family not in CELL2D_SHAPE_FAMILIES:
+            raise ProtocolError("shape_family is not registered for Cell2D")
+        material = params["material"]
+        if material not in CELL2D_MATERIALS:
+            raise ProtocolError("material is not registered for Cell2D")
+        return {
+            "object_name": _name(params["object_name"], "object_name"),
+            "asset_id": asset_id,
+            "visual_category": category,
+            "domain": domain,
+            "bounds": _bounds(params["bounds"]),
+            "shape_family": shape_family,
+            "material": material,
+            "color": _hex_color(params["color"], "color"),
+            "z": _number(params["z"], "z", minimum=-MAX_ABS_COORDINATE, maximum=MAX_ABS_COORDINATE),
+            "reference_id": _name(params["reference_id"], "reference_id"),
+            "source_observation_id": _name(params["source_observation_id"], "source_observation_id"),
         }
 
     if operation == "transform_object":

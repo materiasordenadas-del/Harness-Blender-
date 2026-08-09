@@ -186,6 +186,87 @@ def _op_create_primitive(params: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _cell2d_material(semantic_name: str, color: str) -> bpy.types.Material:
+    name = f"Cell2D_{semantic_name}_{color[1:]}"
+    material = bpy.data.materials.get(name)
+    if material is None:
+        material = bpy.data.materials.new(name)
+        material.use_nodes = True
+    rgba = tuple(int(color[index:index + 2], 16) / 255.0 for index in (1, 3, 5)) + (1.0,)
+    material.diffuse_color = rgba
+    if material.use_nodes:
+        node = material.node_tree.nodes.get("Principled BSDF")
+        if node is not None:
+            node.inputs["Base Color"].default_value = rgba
+            node.inputs["Roughness"].default_value = 0.65
+    return material
+
+
+def _cell2d_vertices(bounds: list[float], shape_family: str, z: float) -> tuple[list[tuple[float, float, float]], list[tuple[int, ...]]]:
+    x, y, width, height = bounds
+    center_x, center_y = x + width / 2.0, y + height / 2.0
+    if shape_family in {"circle", "ellipse"}:
+        count = 32
+        vertices = [
+            (center_x + width / 2.0 * math.cos(2.0 * math.pi * index / count), center_y + height / 2.0 * math.sin(2.0 * math.pi * index / count), z)
+            for index in range(count)
+        ]
+        return vertices, [tuple(range(count))]
+    return [(x, y, z), (x + width, y, z), (x + width, y + height, z), (x, y + height, z)], [(0, 1, 2, 3)]
+
+
+def _op_create_cell2d_symbol(params: dict[str, Any]) -> dict[str, Any]:
+    name = params["object_name"]
+    if bpy.data.objects.get(name) is not None:
+        raise ValueError(f"An object named {name!r} already exists")
+    collection = bpy.data.collections.get("Cell2D")
+    if collection is None:
+        collection = bpy.data.collections.new("Cell2D")
+        bpy.context.scene.collection.children.link(collection)
+    if params["shape_family"] == "text":
+        data = bpy.data.curves.new(name, type="FONT")
+        data.body = params["asset_id"] or params["visual_category"]
+        data.align_x = "CENTER"
+        data.align_y = "CENTER"
+        data.size = params["bounds"][3]
+        obj = bpy.data.objects.new(name, data)
+        obj.location = (params["bounds"][0] + params["bounds"][2] / 2.0, params["bounds"][1] + params["bounds"][3] / 2.0, params["z"])
+    else:
+        vertices, faces = _cell2d_vertices(params["bounds"], params["shape_family"], params["z"])
+        data = bpy.data.meshes.new(name)
+        data.from_pydata(vertices, [], faces)
+        data.update()
+        obj = bpy.data.objects.new(name, data)
+    collection.objects.link(obj)
+    material = _cell2d_material(params["material"], params["color"])
+    obj.data.materials.append(material)
+    obj["hb_type"] = "cell2d_symbol"
+    obj["hb_asset_id"] = params["asset_id"] or ""
+    obj["hb_category"] = params["visual_category"]
+    obj["hb_domain"] = params["domain"]
+    obj["hb_shape_family"] = params["shape_family"]
+    obj["hb_reference_id"] = params["reference_id"]
+    obj["hb_source_observation_id"] = params["source_observation_id"]
+    bpy.context.view_layer.update()
+
+    def restore() -> None:
+        created = bpy.data.objects.get(name)
+        if created is not None:
+            bpy.data.objects.remove(created, do_unlink=True)
+
+    _record_undo(f"create {name}", restore)
+    return {
+        "name": obj.name,
+        "type": obj.type,
+        "collection": collection.name,
+        "asset_id": params["asset_id"],
+        "visual_category": params["visual_category"],
+        "domain": params["domain"],
+        "reference_id": params["reference_id"],
+        "dimensions": list(obj.dimensions),
+    }
+
+
 def _op_transform_object(params: dict[str, Any]) -> dict[str, Any]:
     obj = _object(params["object_name"])
     previous_location = tuple(obj.location)
@@ -435,6 +516,7 @@ OPERATIONS: dict[str, Operation] = {
     "evaluate_penetration": evaluator_operations.evaluate_penetration,
     "inspect_object": _op_inspect_object,
     "create_primitive": _op_create_primitive,
+    "create_cell2d_symbol": _op_create_cell2d_symbol,
     "transform_object": _op_transform_object,
     "delete_object": _op_delete_object,
     "validate_mesh": _op_validate_mesh,

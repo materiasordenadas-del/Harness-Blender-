@@ -533,6 +533,19 @@ def create_primitive(
 
 
 @mcp.tool()
+def create_cell2d_symbol(
+    object_name: str, asset_id: str | None, visual_category: str, domain: str, bounds: list[float],
+    shape_family: str, material: str, color: str, z: float, reference_id: str, source_observation_id: str,
+) -> str:
+    """Create one editable 2D Cell2D symbol from a fully typed reconstruction instruction."""
+    return _run("create_cell2d_symbol", {
+        "object_name": object_name, "asset_id": asset_id, "visual_category": visual_category,
+        "domain": domain, "bounds": bounds, "shape_family": shape_family, "material": material,
+        "color": color, "z": z, "reference_id": reference_id, "source_observation_id": source_observation_id,
+    })
+
+
+@mcp.tool()
 def transform_object(
     object_name: str,
     location: list[float] | None = None,
