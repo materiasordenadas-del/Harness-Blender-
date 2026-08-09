@@ -1,0 +1,25 @@
+{
+  "style_pack_id": "harness_cell_diagram_v1",
+  "version": "0.1.0",
+  "status": "scaffolded",
+  "style_contract": "../../config/style.json",
+  "target": "Diagrama celular 2D editable en Blender con identidad visual Harness.",
+  "required_visual_categories": [
+    "membrane",
+    "cytoplasm",
+    "organelle",
+    "ion_channel",
+    "pump",
+    "exchanger",
+    "receptor",
+    "signaling_protein",
+    "second_messenger",
+    "ion",
+    "vesicle",
+    "activation_arrow",
+    "inhibition_line",
+    "transport_arrow",
+    "label"
+  ],
+  "assets": []
+}
