@@ -1,21 +1,193 @@
-"""MCP server exposing the V0 Blender semantic toolset."""
+"""MCP server exposing the Harness Blender V1 semantic toolset."""
 
 from __future__ import annotations
 
 import base64
 import json
+import os
+from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP, Image
 
 from .connection import BlenderConnection
+from .docs_index import initialize as initialize_docs, search as search_docs
+from .evaluator import diff_reports
+from .router import route
+from .skill_registry import content as skill_content, discover as discover_skills
+from .source_registry import load_sources
+from .scene_packet import enrich_task_packet
+from .task_packet import build_task_packet
+from .tool_catalog import list_candidates
+from .review_bundle import build_review_bundle, save_review_bundle
+from .benchmarks import run_benchmarks
+from .visual_review import next_visual_review_step as decide_next_visual_review_step, validate_visual_review
+from .visual_evidence import validate_visual_comparison
 
-mcp = FastMCP("Harness Blender V0")
+mcp = FastMCP("Harness Blender V1")
 _connection = BlenderConnection()
+
+
+def _docs_path() -> Path:
+    return Path(os.getenv("HARNESS_DOCS_INDEX", Path.cwd() / "config" / "v3_docs.sqlite"))
+
+
+def _ensure_docs() -> Path:
+    path = _docs_path()
+    if not path.exists():
+        initialize_docs(path)
+    return path
 
 
 def _run(operation: str, params: dict[str, Any] | None = None) -> str:
     return json.dumps(_connection.call(operation, params), ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def route_blender_task(task: str) -> str:
+    """Return only the V3 skills, official docs and tools relevant to a task."""
+    result = route(task)
+    return json.dumps({"task": result.task, "skills": result.skills, "tools": result.tools, "docs": result.docs}, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def build_blender_task_packet(task: str) -> str:
+    """Return bounded skills, tools, checks and stop conditions for one task."""
+    return json.dumps(build_task_packet(task), ensure_ascii=False, indent=2)
+
+
+def _snapshot_scene(object_names: list[str] | None = None) -> dict[str, Any]:
+    if object_names is not None and (not isinstance(object_names, list) or not all(isinstance(name, str) and name for name in object_names)):
+        raise ValueError("object_names must be a list of non-empty strings")
+    scene = _connection.call("inspect_scene_detailed")
+    requested = set(object_names or [item["name"] for item in scene["objects"]])
+    known = {item["name"] for item in scene["objects"]}
+    missing = requested - known
+    if missing:
+        raise ValueError(f"Unknown Blender object(s): {', '.join(sorted(missing))}")
+    objects = []
+    for item in scene["objects"]:
+        if item["name"] not in requested:
+            continue
+        entry = {"name": item["name"], "type": item["type"], "metrics": {}}
+        if item["type"] == "MESH":
+            entry["metrics"] = _connection.call("evaluate_mesh", {"object_name": item["name"]})
+        elif item["type"] == "CURVE":
+            try:
+                entry["metrics"] = _connection.call("evaluate_tubular", {"object_name": item["name"], "spline_index": 0})
+            except RuntimeError as exc:
+                # Inspection remains useful even when a curve is not yet a valid tube.
+                entry["metrics_error"] = str(exc)
+        objects.append(entry)
+    return {"scene": scene["scene"], "objects": objects}
+
+
+@mcp.tool()
+def capture_scene_snapshot(object_names: list[str] | None = None) -> str:
+    """Capture scene/object metrics before or after typed Blender operations."""
+    return json.dumps(_snapshot_scene(object_names), ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def build_scene_task_packet(task: str, object_names: list[str] | None = None) -> str:
+    """Build a Task Packet using live Blender object types and V4 metrics."""
+    return json.dumps(enrich_task_packet(build_task_packet(task), _snapshot_scene(object_names)), ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def build_review_bundle_from_snapshots(
+    before: dict[str, Any], after: dict[str, Any], operations: list[str], visual_review: dict[str, Any] | None = None,
+    visual_comparison: dict[str, Any] | None = None,
+    visual_required: bool = False,
+) -> str:
+    """Compare real snapshots and return PASS, NEEDS_IMPROVEMENT, FAIL or NEEDS_REVIEW."""
+    return json.dumps(build_review_bundle(before, after, operations, visual_review, visual_comparison, visual_required=visual_required), ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def save_review_bundle_to_evidence(bundle: dict[str, Any], evidence_id: str) -> str:
+    """Save one immutable evidence bundle under HARNESS_EVIDENCE_DIR."""
+    return json.dumps({"filepath": str(save_review_bundle(bundle, evidence_id))}, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def list_harness_sources() -> str:
+    """List curated, versioned research sources without contacting the network."""
+    return json.dumps(list(load_sources().values()), ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def list_tool_candidates(status: str | None = None) -> str:
+    """List research candidates only; this does not expose or execute new Blender tools."""
+    candidates = list_candidates()
+    if status is not None:
+        candidates = [item for item in candidates if item["status"] == status]
+    return json.dumps(candidates, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def run_harness_benchmarks() -> str:
+    """Run deterministic routing benchmarks; this never connects to Blender."""
+    return json.dumps(run_benchmarks(), ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def diff_evaluation_reports(before: dict[str, Any], after: dict[str, Any]) -> str:
+    """Compare two V4 read-only evaluation reports without contacting Blender."""
+    return json.dumps(diff_reports(before, after), ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def validate_visual_review_report(review: dict[str, Any]) -> str:
+    """Validate a structured observation made from controlled views; it never edits Blender."""
+    return json.dumps(validate_visual_review(review), ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def build_visual_review_capture_plan(focus_object: str) -> str:
+    """Return the three required single-image captures in their fixed comparison order."""
+    if not isinstance(focus_object, str) or not focus_object.strip() or len(focus_object) > 255:
+        raise ValueError("focus_object must contain 1-255 characters")
+    return json.dumps({
+        "focus_object": focus_object.strip(),
+        "views": ["front", "right", "perspective"],
+        "instruction": "Call capture_controlled_view once for each view, in this order, before visual comparison.",
+    }, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def validate_visual_comparison_report(comparison: dict[str, Any]) -> str:
+    """Validate reference/result comparison metadata without judging or editing images."""
+    return json.dumps(validate_visual_comparison(comparison), ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def next_visual_review_step(review: dict[str, Any], iteration: int = 0, max_iterations: int = 3) -> str:
+    """Apply V5's 1-5 iteration limit and return whether another correction may be attempted."""
+    return json.dumps(decide_next_visual_review_step(review, iteration, max_iterations), ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def list_blender_skills(domain: str | None = None) -> str:
+    """List local skill metadata; optional domain filters without loading skill bodies."""
+    skills = discover_skills()
+    if domain:
+        skills = [skill for skill in skills if skill.domain == domain]
+    return json.dumps([{"name": skill.name, "domain": skill.domain, "applies_to": skill.applies_to, "tools": skill.tools, "sources": skill.sources} for skill in skills], ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def get_blender_skill(name: str) -> str:
+    """Load the Markdown body of one named local skill on demand."""
+    return skill_content(name)
+
+
+@mcp.tool()
+def search_blender_docs(query: str, limit: int = 5) -> str:
+    """Search the local index of official docs.blender.org entries."""
+    if not 1 <= limit <= 10:
+        raise ValueError("limit must be between 1 and 10")
+    return json.dumps(search_docs(_ensure_docs(), query, limit), ensure_ascii=False, indent=2)
 
 
 @mcp.tool()
@@ -31,9 +203,480 @@ def inspect_scene() -> str:
 
 
 @mcp.tool()
+def inspect_scene_detailed() -> str:
+    """Read hierarchy, collections, modifiers and mesh/curve metrics without editing Blender."""
+    return _run("inspect_scene_detailed")
+
+
+@mcp.tool()
 def inspect_object(object_name: str) -> str:
     """Inspect one object, including transform, mesh counts, modifiers and materials."""
     return _run("inspect_object", {"object_name": object_name})
+
+
+@mcp.tool()
+def create_curve(name: str, spline_type: str, points: list[list[float]]) -> str:
+    """Create an editable 3D Bézier, NURBS or Poly curve from 2-256 points."""
+    return _run("create_curve", {"name": name, "spline_type": spline_type, "points": points})
+
+
+@mcp.tool()
+def inspect_curve(object_name: str) -> str:
+    """Inspect an editable curve, including splines, points, handles, radius and bevel."""
+    return _run("inspect_curve", {"object_name": object_name})
+
+
+@mcp.tool()
+def inspect_mesh_detailed(object_name: str) -> str:
+    """Inspect mesh topology, manifold state, polygon types and materials."""
+    return _run("inspect_mesh_detailed", {"object_name": object_name})
+
+
+@mcp.tool()
+def inspect_uv(object_name: str) -> str:
+    """Read UV-layer names, active layer, coordinate counts and bounds without editing."""
+    return _run("inspect_uv", {"object_name": object_name})
+
+
+@mcp.tool()
+def evaluate_uv_layout(object_name: str) -> str:
+    """Check active UV bounds and degenerate UV faces without editing Blender."""
+    return _run("evaluate_uv_layout", {"object_name": object_name})
+
+
+@mcp.tool()
+def unwrap_uv(object_name: str, method: str = "ANGLE_BASED", margin: float = 0.001) -> str:
+    """Unwrap a mesh UV map with a full in-memory snapshot for Harness undo."""
+    return _run("unwrap_uv", {"object_name": object_name, "method": method, "margin": margin})
+
+
+@mcp.tool()
+def sculpt_smooth_region(object_name: str, vertex_indices: list[int], factor: float = 0.5, iterations: int = 1) -> str:
+    """Smooth only named mesh vertices with an in-memory topology snapshot for undo."""
+    return _run("sculpt_smooth_region", {"object_name": object_name, "vertex_indices": vertex_indices, "factor": factor, "iterations": iterations})
+
+
+@mcp.tool()
+def evaluate_mesh(object_name: str) -> str:
+    """Measure mesh topology, area, volume and world bounding box without editing it."""
+    return _run("evaluate_mesh", {"object_name": object_name})
+
+
+@mcp.tool()
+def evaluate_asset_readiness(object_name: str) -> str:
+    """Check a mesh for V7 production readiness without changing Blender."""
+    return _run("evaluate_asset_readiness", {"object_name": object_name})
+
+
+@mcp.tool()
+def inspect_rigging_structure(object_name: str) -> str:
+    """Inspect rig-related mesh or armature structure without editing Blender."""
+    return _run("inspect_rigging_structure", {"object_name": object_name})
+
+@mcp.tool()
+def inspect_movable_structure(object_name: str) -> str:
+    """Inspect a mesh or curve as a possible movable structure without changing it."""
+    return _run("inspect_movable_structure", {"object_name": object_name})
+
+@mcp.tool()
+def prepare_movable_structure(object_name: str, mode: str | None = None) -> str:
+    """Register simple, reversible parts for a named mesh or curve; no geometry changes."""
+    return _run("prepare_movable_structure", {"object_name": object_name, "mode": mode})
+
+@mcp.tool()
+def list_movable_parts(object_name: str) -> str:
+    """List user-facing parts registered for a movable structure."""
+    return _run("list_movable_parts", {"object_name": object_name})
+
+@mcp.tool()
+def get_part_state(object_name: str, part_name: str) -> str:
+    """Read the state of one named movable part."""
+    return _run("get_part_state", {"object_name": object_name, "part_name": part_name})
+
+@mcp.tool()
+def reset_structure(object_name: str) -> str:
+    """Restore registered movable parts to neutral state; can be undone."""
+    return _run("reset_structure", {"object_name": object_name})
+
+@mcp.tool()
+def bend_curve_part(object_name: str, part_name: str, angle_degrees: float) -> str:
+    """Bend one prepared curve part while its base point stays fixed; reversible with reset_curve_part."""
+    return _run("bend_curve_part", {"object_name": object_name, "part_name": part_name, "angle_degrees": angle_degrees})
+
+@mcp.tool()
+def reset_curve_part(object_name: str, part_name: str) -> str:
+    """Restore the original editable curve shape saved before its first bend."""
+    return _run("reset_curve_part", {"object_name": object_name, "part_name": part_name})
+
+@mcp.tool()
+def move_curve_part(object_name: str, part_name: str, offset: list[float]) -> str:
+    """Move a prepared curve part gradually from its protected base."""
+    return _run("move_curve_part", {"object_name": object_name, "part_name": part_name, "offset": offset})
+
+@mcp.tool()
+def twist_curve_part(object_name: str, part_name: str, angle_degrees: float) -> str:
+    """Twist a prepared curve part gradually from its protected base."""
+    return _run("twist_curve_part", {"object_name": object_name, "part_name": part_name, "angle_degrees": angle_degrees})
+
+@mcp.tool()
+def propose_mesh_extension(object_name: str) -> str:
+    """Return a non-editing V8.2 mesh proposal that requires explicit extension and base selections."""
+    return _run("propose_mesh_extension", {"object_name": object_name})
+
+@mcp.tool()
+def prepare_mesh_extension(object_name: str, part_name: str, vertex_indices: list[int], base_vertex_indices: list[int]) -> str:
+    """Create a temporary visible mesh copy for one explicitly selected extension; the source mesh remains unchanged."""
+    return _run("prepare_mesh_extension", {"object_name": object_name, "part_name": part_name, "vertex_indices": vertex_indices, "base_vertex_indices": base_vertex_indices})
+
+@mcp.tool()
+def prepare_selected_mesh_extension(object_name: str, part_name: str) -> str:
+    """Create a temporary mesh copy from a visible Blender vertex selection; its attached boundary becomes the protected base."""
+    return _run("prepare_selected_mesh_extension", {"object_name": object_name, "part_name": part_name})
+
+@mcp.tool()
+def bend_mesh_part(object_name: str, angle_degrees: float, bend_axis: str | None = None, screen_direction: str | None = None) -> str:
+    """Bend a temporary V8.2 mesh copy by a local plane or a simple visible direction: left, right, up or down."""
+    params: dict[str, object] = {"object_name": object_name, "angle_degrees": angle_degrees}
+    if bend_axis is not None: params["bend_axis"] = bend_axis
+    if screen_direction is not None: params["screen_direction"] = screen_direction
+    return _run("bend_mesh_part", params)
+
+@mcp.tool()
+def reset_mesh_part(object_name: str) -> str:
+    """Restore the selected extension of a temporary V8.2 mesh copy from its unchanged source mesh."""
+    return _run("reset_mesh_part", {"object_name": object_name})
+
+@mcp.tool()
+def create_v8_session(session_name: str = "Session", object_names: list[str] | None = None) -> str:
+    """Create a temporary V8.2 rig preview for selected mesh objects; originals remain unchanged."""
+    params: dict[str, object] = {"session_name": session_name}
+    if object_names is not None: params["object_names"] = object_names
+    return _run("create_v8_session", params)
+
+@mcp.tool()
+def inspect_v8_session(session_name: str) -> str:
+    """Inspect a V8.2 preview session, its copies and visible controls without editing Blender."""
+    return _run("inspect_v8_session", {"session_name": session_name})
+
+@mcp.tool()
+def reset_v8_session(session_name: str) -> str:
+    """Restore every visible V8.2 control in a preview session to its neutral pose."""
+    return _run("reset_v8_session", {"session_name": session_name})
+
+@mcp.tool()
+def pose_v8_control(session_name: str, copy_object: str, location: list[float] | None = None, rotation_degrees: list[float] | None = None) -> str:
+    """Move or rotate one visible V8.2 control bone on a temporary copy; the source remains unchanged."""
+    return _run("pose_v8_control", {"session_name": session_name, "copy_object": copy_object, "location": location or [0, 0, 0], "rotation_degrees": rotation_degrees or [0, 0, 0]})
+
+@mcp.tool()
+def create_v8_auto_rig(session_name: str, copy_object: str, bone_count: int = 4) -> str:
+    """Create a local automatic V8.3 chain with 2-16 bones; it yields one independent handle per joint."""
+    return _run("create_v8_auto_rig", {"session_name": session_name, "copy_object": copy_object, "bone_count": bone_count})
+
+@mcp.tool()
+def create_v8_independent_handles(session_name: str, copy_object: str) -> str:
+    """Replace a V8.3 chain with independent local handles; moving one handle does not move the other handles."""
+    return _run("create_v8_independent_handles", {"session_name": session_name, "copy_object": copy_object})
+
+@mcp.tool()
+def accept_v8_session(session_name: str) -> str:
+    """Keep the V8.2 preview copy as an accepted editable result; the source remains unchanged."""
+    return _run("accept_v8_session", {"session_name": session_name})
+
+@mcp.tool()
+def discard_v8_session(session_name: str) -> str:
+    """Delete a V8.2 preview copy and rig while leaving all original objects unchanged."""
+    return _run("discard_v8_session", {"session_name": session_name})
+
+
+@mcp.tool()
+def evaluate_spatial(object_name: str, target_object_name: str) -> str:
+    """Measure world bounding-box overlap and nearest-box distance without editing Blender."""
+    return _run("evaluate_spatial", {"object_name": object_name, "target_object_name": target_object_name})
+
+
+@mcp.tool()
+def evaluate_tubular(object_name: str, spline_index: int = 0) -> str:
+    """Measure curve radii, thickness progression, centerline and approximate curvature."""
+    return _run("evaluate_tubular", {"object_name": object_name, "spline_index": spline_index})
+
+
+@mcp.tool()
+def evaluate_penetration(object_name: str, target_object_name: str) -> str:
+    """Measure intersecting face pairs between two meshes without editing Blender."""
+    return _run("evaluate_penetration", {"object_name": object_name, "target_object_name": target_object_name})
+
+
+@mcp.tool()
+def recalculate_normals(object_name: str, outward: bool = True) -> str:
+    """Recalculate all mesh face normals outward or inward."""
+    return _run("recalculate_normals", {"object_name": object_name, "outward": outward})
+
+
+@mcp.tool()
+def flip_normals(object_name: str) -> str:
+    """Invert all mesh face normals reversibly."""
+    return _run("flip_normals", {"object_name": object_name})
+
+
+@mcp.tool()
+def subdivide_mesh(object_name: str, cuts: int) -> str:
+    """Subdivide all mesh edges with 1-4 cuts, reversibly."""
+    return _run("subdivide_mesh", {"object_name": object_name, "cuts": cuts})
+
+
+@mcp.tool()
+def smooth_mesh(object_name: str, factor: float) -> str:
+    """Smooth mesh vertices with a bounded factor from 0 to 1."""
+    return _run("smooth_mesh", {"object_name": object_name, "factor": factor})
+
+
+@mcp.tool()
+def create_material(name: str) -> str:
+    """Create a basic Principled material."""
+    return _run("create_material", {"name": name})
+
+
+@mcp.tool()
+def assign_material(object_name: str, material_name: str) -> str:
+    """Append a material to a mesh object."""
+    return _run("assign_material", {"object_name": object_name, "material_name": material_name})
+
+
+@mcp.tool()
+def set_base_color(material_name: str, base_color: list[float]) -> str:
+    """Set a material RGBA base color, values 0-1."""
+    return _run("set_base_color", {"material_name": material_name, "base_color": base_color})
+
+
+@mcp.tool()
+def set_roughness(material_name: str, roughness: float) -> str:
+    """Set Principled roughness from 0 to 1."""
+    return _run("set_roughness", {"material_name": material_name, "roughness": roughness})
+
+
+@mcp.tool()
+def set_metallic(material_name: str, metallic: float) -> str:
+    """Set Principled metallic from 0 to 1."""
+    return _run("set_metallic", {"material_name": material_name, "metallic": metallic})
+
+
+@mcp.tool()
+def set_alpha(material_name: str, alpha: float) -> str:
+    """Set Principled alpha from 0 to 1."""
+    return _run("set_alpha", {"material_name": material_name, "alpha": alpha})
+
+
+@mcp.tool()
+def add_modifier(object_name: str, name: str, modifier_type: str) -> str:
+    """Add one modifier from the V2 allowlist, reversibly."""
+    return _run("add_modifier", {"object_name": object_name, "name": name, "modifier_type": modifier_type})
+
+
+@mcp.tool()
+def solidify_mesh(object_name: str, thickness: float, offset: float = -1.0, fill_rim: bool = True, modifier_name: str = "Harness Solidify") -> str:
+    """Give a mesh reversible wall thickness; fill_rim closes its open border."""
+    return _run("solidify_mesh", {"object_name": object_name, "thickness": thickness, "offset": offset, "fill_rim": fill_rim, "modifier_name": modifier_name})
+
+
+@mcp.tool()
+def make_mesh_solid(object_name: str, output_name: str, thickness: float, voxel_size: float) -> str:
+    """Create a separate closed solid copy from a surface mesh; the source remains unchanged."""
+    return _run("make_mesh_solid", {"object_name": object_name, "output_name": output_name, "thickness": thickness, "voxel_size": voxel_size})
+
+
+@mcp.tool()
+def set_modifier_parameter(object_name: str, modifier_name: str, parameter: str, value: float) -> str:
+    """Set a limited V2 modifier parameter: levels, thickness or ratio."""
+    return _run("set_modifier_parameter", {"object_name": object_name, "modifier_name": modifier_name, "parameter": parameter, "value": value})
+
+
+@mcp.tool()
+def remove_modifier(object_name: str, modifier_name: str) -> str:
+    """Remove a V2 modifier and restore its supported settings with undo."""
+    return _run("remove_modifier", {"object_name": object_name, "modifier_name": modifier_name})
+
+
+@mcp.tool()
+def apply_modifier(object_name: str, modifier_name: str) -> str:
+    """Apply one existing modifier and preserve a reversible Harness snapshot."""
+    return _run("apply_modifier", {"object_name": object_name, "modifier_name": modifier_name})
+
+
+@mcp.tool()
+def merge_vertices(object_name: str, vertex_indices: list[int]) -> str:
+    """Merge 2-256 vertices at their shared center, reversibly."""
+    return _run("merge_vertices", {"object_name": object_name, "vertex_indices": vertex_indices})
+
+
+@mcp.tool()
+def bridge_edge_loops(object_name: str, edge_indices: list[int]) -> str:
+    """Bridge two compatible boundary loops selected by their edge indices."""
+    return _run("bridge_edge_loops", {"object_name": object_name, "edge_indices": edge_indices})
+
+
+@mcp.tool()
+def split_mesh_by_plane(object_name: str, plane_point: list[float], plane_normal: list[float], positive_name: str, negative_name: str, cap: bool = True) -> str:
+    """Create two capped mesh outputs; retain the source hidden for reversible recovery."""
+    return _run("split_mesh_by_plane", {"object_name": object_name, "plane_point": plane_point, "plane_normal": plane_normal, "positive_name": positive_name, "negative_name": negative_name, "cap": cap})
+
+
+@mcp.tool()
+def inspect_active_selection() -> str:
+    """Return Blender's active selected object so the user need not type its name."""
+    return _run("inspect_active_selection")
+
+
+@mcp.tool()
+def split_selected_mesh_by_view_line(line_start: list[float], line_end: list[float], positive_name: str, negative_name: str, cap: bool = True) -> str:
+    """Turn a normalized visible viewport line into a reversible cut of the active mesh."""
+    return _run("split_selected_mesh_by_view_line", {"line_start": line_start, "line_end": line_end, "positive_name": positive_name, "negative_name": negative_name, "cap": cap})
+
+
+@mcp.tool()
+def fill_hole(object_name: str, boundary_edge_indices: list[int]) -> str:
+    """Fill one closed boundary loop chosen by edge indices, reversibly."""
+    return _run("fill_hole", {"object_name": object_name, "boundary_edge_indices": boundary_edge_indices})
+
+
+@mcp.tool()
+def boolean_union(object_name: str, target_object_name: str) -> str:
+    """Apply an exact Boolean union to one mesh, reversibly."""
+    return _run("boolean_union", {"object_name": object_name, "target_object_name": target_object_name})
+
+
+@mcp.tool()
+def boolean_difference(object_name: str, target_object_name: str) -> str:
+    """Apply an exact Boolean difference to one mesh, reversibly."""
+    return _run("boolean_difference", {"object_name": object_name, "target_object_name": target_object_name})
+
+
+@mcp.tool()
+def boolean_intersection(object_name: str, target_object_name: str) -> str:
+    """Apply an exact Boolean intersection to one mesh, reversibly."""
+    return _run("boolean_intersection", {"object_name": object_name, "target_object_name": target_object_name})
+
+
+@mcp.tool()
+def decimate_mesh(object_name: str, ratio: float) -> str:
+    """Apply Decimate with a ratio from 0.01 to 1, reversibly."""
+    return _run("decimate_mesh", {"object_name": object_name, "ratio": ratio})
+
+
+@mcp.tool()
+def voxel_remesh(object_name: str, voxel_size: float) -> str:
+    """Apply voxel remesh with an explicit, bounded voxel size."""
+    return _run("voxel_remesh", {"object_name": object_name, "voxel_size": voxel_size})
+
+
+@mcp.tool()
+def add_curve_point(object_name: str, spline_index: int, co: list[float]) -> str:
+    """Append one editable point to a single-spline curve."""
+    return _run("add_curve_point", {"object_name": object_name, "spline_index": spline_index, "co": co})
+
+
+@mcp.tool()
+def move_curve_point(object_name: str, spline_index: int, point_index: int, co: list[float]) -> str:
+    """Move one editable curve point without converting the curve."""
+    return _run("move_curve_point", {
+        "object_name": object_name, "spline_index": spline_index, "point_index": point_index, "co": co,
+    })
+
+
+@mcp.tool()
+def remove_curve_point(object_name: str, spline_index: int, point_index: int) -> str:
+    """Remove one point while retaining at least two points in the spline."""
+    return _run("remove_curve_point", {
+        "object_name": object_name, "spline_index": spline_index, "point_index": point_index,
+    })
+
+
+@mcp.tool()
+def set_curve_handle_type(
+    object_name: str, spline_index: int, point_index: int, side: str, handle_type: str
+) -> str:
+    """Set one Bézier handle type: AUTO, ALIGNED, FREE or VECTOR."""
+    return _run("set_curve_handle_type", {
+        "object_name": object_name, "spline_index": spline_index, "point_index": point_index,
+        "side": side, "handle_type": handle_type,
+    })
+
+
+@mcp.tool()
+def set_curve_handle_position(
+    object_name: str, spline_index: int, point_index: int, side: str, co: list[float]
+) -> str:
+    """Set the position of one Bézier handle in object-local coordinates."""
+    return _run("set_curve_handle_position", {
+        "object_name": object_name, "spline_index": spline_index, "point_index": point_index,
+        "side": side, "co": co,
+    })
+
+
+@mcp.tool()
+def subdivide_curve(object_name: str, spline_index: int, cuts: int) -> str:
+    """Insert 1-16 evenly spaced editable control points per spline segment."""
+    return _run("subdivide_curve", {"object_name": object_name, "spline_index": spline_index, "cuts": cuts})
+
+
+@mcp.tool()
+def resample_curve(object_name: str, spline_index: int, point_count: int) -> str:
+    """Replace a spline with exactly 2-256 editable, evenly sampled control points."""
+    return _run("resample_curve", {
+        "object_name": object_name, "spline_index": spline_index, "point_count": point_count,
+    })
+
+
+@mcp.tool()
+def convert_curve_to_mesh(object_name: str, mesh_name: str) -> str:
+    """Create an explicit mesh copy of a curve, preserving its editable source."""
+    return _run("convert_curve_to_mesh", {"object_name": object_name, "mesh_name": mesh_name})
+
+
+@mcp.tool()
+def set_curve_point_radius(object_name: str, spline_index: int, point_index: int, radius: float) -> str:
+    """Set the taper radius of one editable curve point."""
+    return _run("set_curve_point_radius", {
+        "object_name": object_name, "spline_index": spline_index, "point_index": point_index, "radius": radius,
+    })
+
+
+@mcp.tool()
+def set_curve_point_tilt(object_name: str, spline_index: int, point_index: int, tilt: float) -> str:
+    """Set the tilt in radians of one editable curve point."""
+    return _run("set_curve_point_tilt", {
+        "object_name": object_name, "spline_index": spline_index, "point_index": point_index, "tilt": tilt,
+    })
+
+
+@mcp.tool()
+def set_curve_bevel_depth(object_name: str, bevel_depth: float) -> str:
+    """Set the curve's tube radius without converting it to a mesh."""
+    return _run("set_curve_bevel_depth", {"object_name": object_name, "bevel_depth": bevel_depth})
+
+
+@mcp.tool()
+def set_curve_bevel_resolution(object_name: str, bevel_resolution: int) -> str:
+    """Set the number of sides used for the editable curve tube."""
+    return _run("set_curve_bevel_resolution", {
+        "object_name": object_name, "bevel_resolution": bevel_resolution,
+    })
+
+
+@mcp.tool()
+def set_curve_resolution(object_name: str, spline_index: int, resolution_u: int) -> str:
+    """Set the evaluated resolution of one editable spline."""
+    return _run("set_curve_resolution", {
+        "object_name": object_name, "spline_index": spline_index, "resolution_u": resolution_u,
+    })
+
+
+@mcp.tool()
+def set_curve_cyclic(object_name: str, spline_index: int, cyclic: bool) -> str:
+    """Open or close one editable spline."""
+    return _run("set_curve_cyclic", {
+        "object_name": object_name, "spline_index": spline_index, "cyclic": cyclic,
+    })
 
 
 @mcp.tool()
@@ -90,7 +733,7 @@ def save_blend(filepath: str | None = None) -> str:
 
 @mcp.tool()
 def undo_last_action() -> str:
-    """Revert the most recent reversible Harness Blender V0 operation."""
+    """Revert the most recent reversible Harness Blender operation."""
     return _run("undo")
 
 
@@ -110,16 +753,78 @@ def capture_blender_screen() -> Image:
     return Image(data=data, format="png")
 
 
-@mcp.resource("harness://v0/capabilities")
+@mcp.tool()
+def capture_controlled_view(
+    view: str = "perspective", focus_object: str | None = None, frame_selected: bool = True
+) -> Image:
+    """Capture a fixed GUI viewport view, optionally focused on one object, then restore the prior view."""
+    result = _connection.call("capture_controlled_view", {
+        "view": view, "focus_object": focus_object, "frame_selected": frame_selected,
+    })
+    encoded = result.get("png_base64")
+    if result.get("format") != "png" or not isinstance(encoded, str):
+        raise RuntimeError("Blender returned an invalid controlled-view PNG")
+    data = base64.b64decode(encoded, validate=True)
+    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise RuntimeError("Blender controlled-view response is not a PNG")
+    return Image(data=data, format="png")
+
+
+@mcp.tool()
+def create_procedural_tube_setup(
+    object_name: str, group_name: str, profile_radius: float, resample_length: float
+) -> str:
+    """Attach a reversible Geometry Nodes tube recipe to one editable curve."""
+    return _run("create_procedural_tube_setup", {
+        "object_name": object_name, "group_name": group_name,
+        "profile_radius": profile_radius, "resample_length": resample_length,
+    })
+
+
+@mcp.tool()
+def create_surface_scatter_setup(surface_object_name: str, instance_object_name: str, group_name: str, density: float) -> str:
+    """Attach a reversible Geometry Nodes scatter recipe to a mesh surface."""
+    return _run("create_surface_scatter_setup", {"surface_object_name": surface_object_name, "instance_object_name": instance_object_name, "group_name": group_name, "density": density})
+
+
+@mcp.tool()
+def create_procedural_branching_setup(main_curve_name: str, branch_curve_names: list[str], group_name: str, profile_radius: float, resample_length: float) -> str:
+    """Attach a reversible procedural branching tube recipe to editable curves."""
+    return _run("create_procedural_branching_setup", {"main_curve_name": main_curve_name, "branch_curve_names": branch_curve_names, "group_name": group_name, "profile_radius": profile_radius, "resample_length": resample_length})
+
+
+@mcp.tool()
+def inspect_geometry_node_tree(object_name: str) -> str:
+    """Inspect the Geometry Nodes group attached to one object."""
+    return _run("inspect_geometry_node_tree", {"object_name": object_name})
+
+
+@mcp.resource("harness://v1/capabilities")
 def capabilities() -> str:
-    """Describe the exact limits of V0 so the agent does not invent tools."""
+    """Describe the exact limits of V1 so the agent does not invent tools."""
     payload: dict[str, Any] = {
-        "version": "0.1.0",
+        "version": "0.2.0-v1-curves",
         "transport": "typed operation + validated params; no Python source over socket",
         "tools": [
             "blender_ping",
             "inspect_scene",
             "inspect_object",
+            "create_curve",
+            "inspect_curve",
+            "add_curve_point",
+            "move_curve_point",
+            "remove_curve_point",
+            "set_curve_handle_type",
+            "set_curve_handle_position",
+            "set_curve_point_radius",
+            "set_curve_point_tilt",
+            "set_curve_bevel_depth",
+            "set_curve_bevel_resolution",
+            "set_curve_resolution",
+            "set_curve_cyclic",
+            "subdivide_curve",
+            "resample_curve",
+            "convert_curve_to_mesh",
             "create_primitive",
             "transform_object",
             "delete_object",
@@ -138,6 +843,104 @@ def capabilities() -> str:
         ],
     }
     return json.dumps(payload, indent=2)
+
+
+@mcp.resource("harness://v3/skills")
+def v3_skills_resource() -> str:
+    """Read-only local skill metadata for V3 planning."""
+    return list_blender_skills()
+
+
+@mcp.resource("harness://v3/docs")
+def v3_docs_resource() -> str:
+    """Read-only catalog of the local official Blender documentation index."""
+    return search_blender_docs("bmesh OR boolean OR curve", 10)
+
+
+@mcp.resource("harness://v2/capabilities")
+def v2_capabilities() -> str:
+    """Describe the typed V2 mesh and material operations."""
+    payload = {
+        "version": "0.3.0-v2-mesh",
+        "transport": "typed operation + validated params; no Python source over socket",
+        "tools": [
+            "inspect_mesh_detailed", "recalculate_normals", "flip_normals",
+            "subdivide_mesh", "smooth_mesh", "merge_vertices", "bridge_edge_loops", "fill_hole",
+            "boolean_union", "boolean_difference", "boolean_intersection", "voxel_remesh", "decimate_mesh",
+            "create_material", "assign_material", "set_base_color", "set_roughness", "set_metallic", "set_alpha",
+            "add_modifier", "set_modifier_parameter", "apply_modifier", "remove_modifier", "undo_last_action",
+        ],
+        "limits": {
+            "vertex_or_edge_indices": "2-256 (bridge requires at least 6; fill requires at least 3)",
+            "subdivide_cuts": "1-4", "smooth_factor": "0-1", "decimate_ratio": "0.01-1",
+            "voxel_size": "0.001-1000", "material_values": "0-1",
+        },
+        "not_yet_available": ["arbitrary model-generated Python", "Geometry Nodes authoring", "sculpt operations"],
+    }
+    return json.dumps(payload, indent=2)
+
+
+@mcp.resource("harness://v4/capabilities")
+def v4_capabilities() -> str:
+    """Describe the read-only V4 evaluation surface."""
+    payload = {
+        "version": "0.5.0-v4-evaluator",
+        "read_only": True,
+        "tools": [
+            "inspect_scene_detailed", "evaluate_mesh", "evaluate_spatial",
+            "evaluate_penetration", "evaluate_tubular", "diff_evaluation_reports",
+        ],
+        "limits": {
+            "spatial_distance": "axis-aligned world bounding boxes",
+            "penetration": "intersecting triangulated mesh surfaces",
+            "tubular": "editable CURVE with bevel_depth",
+        },
+        "not_yet_available": ["automatic correction", "Geometry Nodes authoring", "sculpt operations"],
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+@mcp.resource("harness://v5/capabilities")
+def v5_capabilities() -> str:
+    """Describe the first V5 visual-capture capability."""
+    payload = {
+        "version": "0.6.0-v5-vision",
+        "tools": ["capture_controlled_view", "validate_visual_review_report", "next_visual_review_step"],
+        "views": ["front", "back", "left", "right", "top", "bottom", "perspective"],
+        "requires_gui": True,
+        "temporary_directory": "HARNESS_BLENDER_TEMP_DIR",
+        "limits": {"default_iterations": 3, "maximum_iterations": 5, "correction_execution": "delegated to existing typed tools"},
+        "not_yet_available": ["built-in vision model", "automatic technique selection"],
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+@mcp.resource("harness://v6/capabilities")
+def v6_capabilities() -> str:
+    """Describe the first reusable Geometry Nodes recipe."""
+    payload = {
+        "version": "0.7.0-v6-geometry-nodes",
+        "tools": ["create_procedural_tube_setup", "inspect_geometry_node_tree"],
+        "recipe": "curve input → resample by length → circle profile → curve to mesh",
+        "inputs": {"profile_radius": "0.001-1000", "resample_length": "0.001-1000"},
+        "reversible": True,
+        "not_yet_available": ["scatter", "instances", "procedural branching"],
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+@mcp.resource("harness://v7/capabilities")
+def v7_capabilities() -> str:
+    """Describe the first read-only V7 asset-production check."""
+    payload = {
+        "version": "0.8.0-v7-production",
+        "read_only": True,
+        "tools": ["evaluate_asset_readiness", "inspect_uv", "unwrap_uv"],
+        "status": ["ready", "needs_review", "blocked"],
+        "checks": ["mesh health", "transform", "collections", "materials", "UV layer metadata"],
+        "not_yet_available": ["sculpt", "retopology", "UV overlap analysis"],
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
 def main() -> None:
