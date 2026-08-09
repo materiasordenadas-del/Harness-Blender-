@@ -12,7 +12,7 @@ Preserve a single visual language across different cell types while allowing eac
 
 1. Resolve the requested cell type and purpose before drawing.
 2. Separate base cell anatomy from physiology overlay.
-3. Load `config/cell_diagram_style.json`.
+3. Load `cell2d/config/style.json`.
 4. Use only registered symbol categories and semantic palette entries.
 5. Keep all composition in XY and use the registered Z layer for each category.
 6. Preserve orthographic presentation.

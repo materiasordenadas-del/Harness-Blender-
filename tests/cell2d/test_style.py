@@ -3,11 +3,11 @@ from pathlib import Path
 
 import pytest
 
-from harness_blender.cell_style import load_style_contract, symbol_contract, validate_style_contract
+from harness_blender.cell2d.style import load_style_contract, symbol_contract, validate_style_contract
 
 
-ROOT = Path(__file__).resolve().parents[1]
-STYLE = ROOT / "config" / "cell_diagram_style.json"
+ROOT = Path(__file__).resolve().parents[2]
+STYLE = ROOT / "cell2d" / "config" / "style.json"
 
 
 def test_repository_style_contract_is_valid():

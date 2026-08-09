@@ -10,7 +10,7 @@ assets/
 
 ## Regla de procedencia
 
-Ningún archivo se añade sin una entrada correspondiente en `catalog/asset_catalog.json`.
+Ningún archivo se añade sin una entrada correspondiente en `cell2d/catalog/asset_catalog.json`.
 La entrada debe conservar fuente, URL exacta, licencia, atribución necesaria y hash del archivo original.
 
 Solo se importan por lote assets cuya licencia permita copiar y adaptar. El catálogo empezará admitiendo CC0, CC BY 4.0 y MIT. Cualquier otra licencia queda en revisión antes de descargar o distribuir el asset.
