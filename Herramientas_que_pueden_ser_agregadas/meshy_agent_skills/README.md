@@ -8,7 +8,8 @@ Licencia upstream revisada: **MIT**.
 
 ## Qué se copió
 
-- `SKILL.md`: copia del skill oficial `skills/meshy-3d-generation/SKILL.md` para que Codex evalúe su compatibilidad con el registro/router de conocimiento de V3.
+- `UPSTREAM_SKILL.md`: copia del skill oficial `skills/meshy-3d-generation/SKILL.md` para evaluación sin modificar su intención ni mezclarlo todavía con V3.
+- `SKILL.md`: variante reducida/adaptada dejada únicamente para que Codex compare qué instrucciones realmente merece la pena conservar en el harness.
 - `LICENSE_UPSTREAM.txt`: licencia MIT del repositorio fuente.
 
 El `reference.md` completo de Meshy es un archivo generado y muy grande. No se duplica aquí en esta primera bandeja de evaluación; el README conserva el repositorio y la ruta exacta upstream (`skills/meshy-3d-generation/reference.md`) para que Codex decida si debe vendorizarse, indexarse como documentación externa o mantenerse fuera del contexto normal.
@@ -56,6 +57,7 @@ Codex debe decidir:
 4. Mantener las API keys fuera del repositorio.
 5. Evitar que instrucciones propias de Claude/Cursor se conviertan accidentalmente en políticas globales del harness.
 6. Mantener el skill cargado bajo demanda, no en cada prompt.
+7. Si `reference.md` debe indexarse externamente en lugar de entrar en cada contexto.
 
 ## Recomendación inicial
 
