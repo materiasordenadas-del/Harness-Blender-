@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Blender-side bridge for Harness Blender V0.
 
-The network worker never calls ``bpy``. It authenticates and validates a closed
-semantic operation request, queues it, and a Blender timer executes that
+The network worker never calls ``bpy``. It validates a closed semantic
+operation request from the local loopback socket, queues it, and a Blender timer executes that
 operation on Blender's main thread. No Python source code crosses the socket.
 """
 
@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import queue
-import secrets
 import socket
 import threading
 import traceback
@@ -44,7 +43,6 @@ class _State:
     thread: threading.Thread | None = None
     stop_event = threading.Event()
     requests: queue.Queue[_PendingRequest] = queue.Queue()
-    token: str = ""
     use_log: bool = False
     last_error: str = ""
 
@@ -99,7 +97,7 @@ def _handle_client(conn: socket.socket) -> None:
         conn.settimeout(REQUEST_TIMEOUT)
         try:
             request = _receive(conn)
-            operation, params = parse_operation_request(request, _State.token)
+            operation, params = parse_operation_request(request)
             if _State.use_log:
                 print(f"Harness Blender: {operation} {sorted(params)}")
             item = _PendingRequest(operation=operation, params=params)
@@ -128,23 +126,11 @@ def _server_loop() -> None:
         _handle_client(conn)
 
 
-def _generate_token() -> str:
-    return secrets.token_urlsafe(32)
-
-
-def _ensure_token(prefs: "HarnessBlenderPreferences") -> str:
-    if not prefs.token:
-        prefs.token = _generate_token()
-    return prefs.token
-
-
-def start_server(host: str, port: int, token: str, use_log: bool = False) -> None:
+def start_server(host: str, port: int, use_log: bool = False) -> None:
     if _State.socket is not None:
         raise RuntimeError("Harness Blender bridge is already running")
     if host not in {"127.0.0.1", "localhost"}:
         raise ValueError("V0 only permits IPv4 loopback hosts")
-    if not token or len(token) < 32:
-        raise ValueError("Access token must be initialized and at least 32 characters")
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -153,7 +139,6 @@ def start_server(host: str, port: int, token: str, use_log: bool = False) -> Non
     sock.listen(5)
 
     _State.socket = sock
-    _State.token = token
     _State.use_log = use_log
     _State.last_error = ""
     _State.stop_event.clear()
@@ -192,23 +177,13 @@ class HarnessBlenderPreferences(bpy.types.AddonPreferences):
 
     host: StringProperty(name="Host", default=DEFAULT_HOST)
     port: IntProperty(name="Port", default=DEFAULT_PORT, min=1024, max=65535)
-    token: StringProperty(
-        name="Access Token",
-        description="Generated locally. Copy it into BLENDER_TOKEN for the MCP server",
-        default="",
-    )
     auto_start: BoolProperty(name="Auto Start", default=True)
     use_log: BoolProperty(name="Log Operation Names", default=False)
 
     def draw(self, _context: bpy.types.Context) -> None:
-        _ensure_token(self)
         layout = self.layout
         layout.prop(self, "host")
         layout.prop(self, "port")
-        layout.prop(self, "token")
-        row = layout.row(align=True)
-        row.operator("harness_blender.copy_token", icon="COPYDOWN")
-        row.operator("harness_blender.regenerate_token", icon="FILE_REFRESH")
         layout.prop(self, "auto_start")
         layout.prop(self, "use_log")
         if _State.socket is None:
@@ -228,7 +203,7 @@ class HARNESS_BLENDER_OT_start(bpy.types.Operator):
     def execute(self, context: bpy.types.Context) -> set[str]:
         prefs = context.preferences.addons[__package__].preferences
         try:
-            start_server(prefs.host, prefs.port, _ensure_token(prefs), prefs.use_log)
+            start_server(prefs.host, prefs.port, prefs.use_log)
         except Exception as exc:
             _State.last_error = str(exc)
             self.report({"ERROR"}, str(exc))
@@ -247,39 +222,11 @@ class HARNESS_BLENDER_OT_stop(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class HARNESS_BLENDER_OT_copy_token(bpy.types.Operator):
-    bl_idname = "harness_blender.copy_token"
-    bl_label = "Copy Token"
-
-    def execute(self, context: bpy.types.Context) -> set[str]:
-        prefs = context.preferences.addons[__package__].preferences
-        context.window_manager.clipboard = _ensure_token(prefs)
-        self.report({"INFO"}, "Harness Blender token copied")
-        return {"FINISHED"}
-
-
-class HARNESS_BLENDER_OT_regenerate_token(bpy.types.Operator):
-    bl_idname = "harness_blender.regenerate_token"
-    bl_label = "Regenerate Token"
-
-    def execute(self, context: bpy.types.Context) -> set[str]:
-        prefs = context.preferences.addons[__package__].preferences
-        was_running = _State.socket is not None
-        if was_running:
-            stop_server()
-        prefs.token = _generate_token()
-        if was_running:
-            start_server(prefs.host, prefs.port, prefs.token, prefs.use_log)
-        self.report({"INFO"}, "Token regenerated; update BLENDER_TOKEN in the MCP client")
-        return {"FINISHED"}
-
-
 def _auto_start() -> None:
     try:
         prefs = bpy.context.preferences.addons[__package__].preferences
-        token = _ensure_token(prefs)
         if prefs.auto_start and _State.socket is None:
-            start_server(prefs.host, prefs.port, token, prefs.use_log)
+            start_server(prefs.host, prefs.port, prefs.use_log)
     except Exception as exc:
         _State.last_error = str(exc)
 
@@ -288,8 +235,6 @@ _CLASSES = (
     HarnessBlenderPreferences,
     HARNESS_BLENDER_OT_start,
     HARNESS_BLENDER_OT_stop,
-    HARNESS_BLENDER_OT_copy_token,
-    HARNESS_BLENDER_OT_regenerate_token,
 )
 
 

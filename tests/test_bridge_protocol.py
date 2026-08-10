@@ -16,31 +16,29 @@ assert spec and spec.loader
 bridge_protocol = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bridge_protocol)
 
-TOKEN = "a" * 43
-
+# Compatibilidad temporal para las llamadas antiguas de estas pruebas. El
+# protocolo ya no envía, lee ni valida este argumento.
+TOKEN = None
 
 def request(operation: str, params=None, **extra):
     payload = {
         "type": "operation",
         "operation": operation,
         "params": params or {},
-        "token": TOKEN,
     }
     payload.update(extra)
     return payload
 
 
-def test_wrong_token_is_rejected():
-    payload = request("ping")
-    payload["token"] = "wrong-token"
-    with pytest.raises(bridge_protocol.AuthenticationError):
-        bridge_protocol.parse_operation_request(payload, TOKEN)
+def test_token_field_is_rejected():
+    with pytest.raises(bridge_protocol.ProtocolError, match="Unknown request field"):
+        bridge_protocol.parse_operation_request(request("ping", token="obsolete"))
 
 
-def test_arbitrary_code_field_is_rejected_even_with_valid_token():
+def test_arbitrary_code_field_is_rejected():
     payload = request("ping", code="import os; os.remove('anything')")
     with pytest.raises(bridge_protocol.ProtocolError, match="Unknown request field"):
-        bridge_protocol.parse_operation_request(payload, TOKEN)
+        bridge_protocol.parse_operation_request(payload)
 
 
 def test_unknown_operation_is_rejected():

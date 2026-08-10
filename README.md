@@ -8,7 +8,7 @@ La **V0** demuestra un núcleo pequeño y verificable:
 Agente MCP
     ↓
 Servidor Harness Blender (Python externo)
-    ↓  TCP loopback: operation + params + token
+    ↓  TCP loopback: operation + params
 Add-on Harness Blender Bridge
     ↓  cola → hilo principal de Blender
 Operaciones V0 cerradas / bpy
@@ -21,7 +21,6 @@ Operaciones V0 cerradas / bpy
 - El socket **no acepta Python**, `code` ni `exec` remoto.
 - Allowlist cerrada de diez operaciones Blender.
 - Validación de parámetros también dentro del add-on, no solo en MCP.
-- Token aleatorio generado localmente al activar el add-on.
 - Inspección de escena y objetos.
 - Creación de primitivas.
 - Transformación y eliminación de objetos.
@@ -70,7 +69,6 @@ dist/harness_blender_bridge-0.1.0.zip
    - Host: `127.0.0.1`
    - Port: `9876`
    - Auto Start: activado
-8. El add-on genera automáticamente un **Access Token aleatorio**. Pulsa **Copy Token** y guárdalo para el paso MCP. No uses un token público compartido.
 
 ### 3. Instalar el servidor externo
 
@@ -90,13 +88,7 @@ pip install -e .
 
 ### 4. Configurar el cliente MCP
 
-Usa `config/mcp.example.json` como referencia y reemplaza:
-
-```text
-<COPY_GENERATED_TOKEN_FROM_BLENDER_PREFERENCES>
-```
-
-por el token generado en Blender. El servidor externo **no tiene token por defecto** y se negará a operar si `BLENDER_TOKEN` está vacío.
+Usa `config/mcp.example.json` como referencia. El bridge acepta únicamente conexiones locales en `127.0.0.1` y no requiere token.
 
 ### 5. Probar
 
@@ -114,8 +106,7 @@ El protocolo del socket solo admite:
 {
   "type": "operation",
   "operation": "create_primitive",
-  "params": {},
-  "token": "..."
+  "params": {}
 }
 ```
 

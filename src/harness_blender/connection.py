@@ -20,7 +20,6 @@ class BlenderConnection:
     host: str = field(default_factory=lambda: os.getenv("BLENDER_HOST", DEFAULT_HOST))
     port: int = field(default_factory=lambda: int(os.getenv("BLENDER_PORT", str(DEFAULT_PORT))))
     timeout: float = field(default_factory=lambda: float(os.getenv("BLENDER_TIMEOUT", str(DEFAULT_TIMEOUT))))
-    token: str = field(default_factory=lambda: os.getenv("BLENDER_TOKEN", ""))
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -29,16 +28,10 @@ class BlenderConnection:
 
     def call(self, operation: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Call one semantic V0 operation in Blender."""
-        if not self.token:
-            raise RuntimeError(
-                "BLENDER_TOKEN is not configured. Copy the generated Access Token "
-                "from Blender's Harness Blender Bridge preferences."
-            )
         request = {
             "type": "operation",
             "operation": operation,
             "params": params or {},
-            "token": self.token,
         }
         with self._lock:
             try:

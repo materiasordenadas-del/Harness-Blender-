@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import math
 import os
-import secrets
 from typing import Any
 
 ALLOWED_PRIMITIVES = {"cube", "uv_sphere", "cylinder", "cone", "torus"}
@@ -95,10 +94,6 @@ MAX_PATH_LENGTH = 4096
 
 class ProtocolError(ValueError):
     """The request is malformed or outside the V0 contract."""
-
-
-class AuthenticationError(PermissionError):
-    """The request did not present the active bridge token."""
 
 
 def _reject_unknown_keys(value: dict[str, Any], allowed: set[str], *, where: str) -> None:
@@ -723,18 +718,13 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
     raise ProtocolError(f"Unhandled V0 operation: {operation}")
 
 
-def parse_operation_request(payload: Any, expected_token: str) -> tuple[str, dict[str, Any]]:
-    """Authenticate and normalize one socket request."""
-    if not expected_token:
-        raise AuthenticationError("Bridge token is not initialized")
+def parse_operation_request(payload: Any, *_deprecated: Any) -> tuple[str, dict[str, Any]]:
+    """Normalize one loopback-only semantic operation request without tokens."""
     if not isinstance(payload, dict):
         raise ProtocolError("Request must be a JSON object")
-    _reject_unknown_keys(payload, {"type", "operation", "params", "token"}, where="request")
+    _reject_unknown_keys(payload, {"type", "operation", "params"}, where="request")
     if payload.get("type") != "operation":
         raise ProtocolError("Request type must be 'operation'")
-    supplied_token = payload.get("token")
-    if not isinstance(supplied_token, str) or not secrets.compare_digest(supplied_token, expected_token):
-        raise AuthenticationError("Invalid Harness Blender bridge token")
     operation = payload.get("operation")
     if not isinstance(operation, str):
         raise ProtocolError("operation must be a string")
