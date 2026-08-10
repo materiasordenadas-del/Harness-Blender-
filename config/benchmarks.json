@@ -1,0 +1,9 @@
+{
+  "benchmarks": [
+    {"id":"bezier_handles","task":"ajusta los handles Bezier de esta curva","skills":["curve-fundamentals","smooth-curves"],"forbidden_tools":["create_material"],"requires_visual":false},
+    {"id":"organic_connection","task":"conectar estos dos vasos con una transicion suave","skills":["tubular-connections","smooth-transitions","bridge-loops"],"forbidden_tools":["boolean_difference"],"requires_visual":true},
+    {"id":"repair_normals","task":"repara las normales de esta malla","skills":["normals"],"forbidden_tools":["voxel_remesh"],"requires_visual":false},
+    {"id":"procedural_tube","task":"crea un tubo procedural con Geometry Nodes","skills":["procedural-tubes"],"forbidden_tools":["execute_python"],"requires_visual":true},
+    {"id":"visual_penetration","task":"revisa visualmente si esta bifurcacion parece abrupta","skills":["visual-review"],"forbidden_tools":["smooth_mesh"],"requires_visual":true}
+  ]
+}

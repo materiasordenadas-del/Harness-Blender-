@@ -1,0 +1,11 @@
+{
+  "version": "v8",
+  "object_name": "BranchMesh",
+  "rig_name": "BranchRig",
+  "root": "root",
+  "articulations": [
+    {"name": "root", "role": "ROOT", "head": [0, 0, 0], "tail": [0, 0, 0.5], "deform": false},
+    {"name": "insertion", "role": "BASE", "parent": "root", "head": [0, 0, 0.5], "tail": [0, 0, 1], "deform": true},
+    {"name": "segment_01", "role": "SEGMENT", "parent": "insertion", "head": [0, 0, 1], "tail": [0, 0, 2], "deform": true}
+  ]
+}

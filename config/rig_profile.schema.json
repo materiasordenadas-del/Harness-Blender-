@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Harness Blender V8 Rig Profile",
+  "type": "object",
+  "required": ["version", "object_name", "rig_name", "root", "articulations"],
+  "properties": {
+    "version": {"const": "v8"},
+    "object_name": {"type": "string", "minLength": 1},
+    "rig_name": {"type": "string", "minLength": 1},
+    "root": {"type": "string", "minLength": 1},
+    "articulations": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "role", "head", "tail"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "role": {"enum": ["ROOT", "CORE", "BASE", "SEGMENT", "END_EFFECTOR"]},
+          "parent": {"type": ["string", "null"]},
+          "head": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+          "tail": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+          "deform": {"type": "boolean"}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -7,12 +7,14 @@ import base64
 from contextlib import contextmanager
 from dataclasses import dataclass
 import math
+import os
 import tempfile
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
 import bmesh
 import bpy
+
 
 
 @dataclass
@@ -29,6 +31,13 @@ def _record_undo(label: str, restore: Callable[[], None]) -> None:
     _UNDO_STACK.append(_UndoAction(label=label, restore=restore))
     if len(_UNDO_STACK) > _MAX_UNDO_ACTIONS:
         del _UNDO_STACK[0]
+
+
+from . import curve_operations
+from . import mesh_operations
+from . import evaluator_operations
+from . import geometry_nodes_operations
+from . import movable_structure_operations
 
 
 def _object(name: str) -> bpy.types.Object:
@@ -304,23 +313,299 @@ def _op_capture_screen(_params: dict[str, Any]) -> dict[str, Any]:
     return {"format": "png", "png_base64": base64.b64encode(data).decode("ascii")}
 
 
+def _op_capture_controlled_view(params: dict[str, Any]) -> dict[str, Any]:
+    """Capture a fixed GUI viewport view and restore the user's view afterward."""
+    if bpy.app.background:
+        raise RuntimeError("Controlled view capture requires Blender GUI mode")
+    temp_root = os.getenv("HARNESS_BLENDER_TEMP_DIR")
+    if not temp_root:
+        raise RuntimeError("Set HARNESS_BLENDER_TEMP_DIR to a writable directory before visual capture")
+    directory = Path(temp_root)
+    if not directory.is_absolute() or not directory.is_dir():
+        raise RuntimeError("HARNESS_BLENDER_TEMP_DIR must be an existing absolute directory")
+    focus = _object(params["focus_object"]) if params["focus_object"] else None
+    for window in bpy.context.window_manager.windows:
+        screen = window.screen
+        for area in screen.areas:
+            if area.type != "VIEW_3D":
+                continue
+            region = next((item for item in area.regions if item.type == "WINDOW"), None)
+            if region is None:
+                continue
+            space = area.spaces.active
+            region_3d = space.region_3d
+            saved_view = (region_3d.view_distance, region_3d.view_location.copy(), region_3d.view_rotation.copy(), region_3d.view_perspective)
+            saved_active = window.view_layer.objects.active
+            saved_selected = tuple(item for item in window.view_layer.objects if item.select_get())
+            try:
+                with bpy.context.temp_override(window=window, screen=screen, area=area, region=region, scene=window.scene, view_layer=window.view_layer):
+                    if focus is not None:
+                        for item in bpy.context.selected_objects:
+                            item.select_set(False)
+                        focus.select_set(True)
+                        bpy.context.view_layer.objects.active = focus
+                    view = params["view"]
+                    if view != "perspective":
+                        status = bpy.ops.view3d.view_axis(type=view.upper(), align_active=False, relative=False)
+                        if "FINISHED" not in status:
+                            raise RuntimeError(f"Blender could not set {view} view")
+                    if focus is not None and params["frame_selected"]:
+                        status = bpy.ops.view3d.view_selected(use_all_regions=False)
+                        if "FINISHED" not in status:
+                            raise RuntimeError("Blender could not frame the focused object")
+                    with tempfile.TemporaryDirectory(prefix="harness_blender_", dir=directory) as temporary:
+                        target = Path(temporary) / "controlled_view.png"
+                        status = bpy.ops.screen.screenshot(filepath=str(target))
+                        if "FINISHED" not in status or not target.exists():
+                            raise RuntimeError(f"Blender screenshot operator returned {sorted(status)}")
+                        data = target.read_bytes()
+                return {"format": "png", "png_base64": base64.b64encode(data).decode("ascii"), "view": view, "focus_object": focus.name if focus else None, "framed": bool(focus and params["frame_selected"])}
+            finally:
+                region_3d.view_distance, region_3d.view_location, region_3d.view_rotation, region_3d.view_perspective = saved_view
+                for item in window.view_layer.objects:
+                    item.select_set(False)
+                for item in saved_selected:
+                    item.select_set(True)
+                window.view_layer.objects.active = saved_active
+    raise RuntimeError("A Blender VIEW_3D window is required for controlled view capture")
+
+
+def _op_create_procedural_tube_setup(params: dict[str, Any]) -> dict[str, Any]:
+    result = geometry_nodes_operations.create_procedural_tube_setup(params)
+    object_name = result["object_name"]
+    modifier_name = result["modifier_name"]
+    group_name = result["group_name"]
+
+    def restore() -> None:
+        obj = bpy.data.objects.get(object_name)
+        modifier = obj.modifiers.get(modifier_name) if obj else None
+        if modifier is not None:
+            obj.modifiers.remove(modifier)
+        group = bpy.data.node_groups.get(group_name)
+        if group is not None and group.users == 0:
+            bpy.data.node_groups.remove(group)
+        bpy.context.view_layer.update()
+
+    _record_undo(f"create Geometry Nodes tube {group_name}", restore)
+    return result
+
+
+def _op_create_surface_scatter_setup(params: dict[str, Any]) -> dict[str, Any]:
+    result = geometry_nodes_operations.create_surface_scatter_setup(params)
+    surface_name, modifier_name, group_name = result["surface_object_name"], result["modifier_name"], result["group_name"]
+
+    def restore() -> None:
+        surface = bpy.data.objects.get(surface_name)
+        modifier = surface.modifiers.get(modifier_name) if surface else None
+        if modifier is not None:
+            surface.modifiers.remove(modifier)
+        group = bpy.data.node_groups.get(group_name)
+        if group is not None and group.users == 0:
+            bpy.data.node_groups.remove(group)
+        bpy.context.view_layer.update()
+
+    _record_undo(f"create Geometry Nodes scatter {group_name}", restore)
+    return result
+
+
+def _op_create_procedural_branching_setup(params: dict[str, Any]) -> dict[str, Any]:
+    result = geometry_nodes_operations.create_procedural_branching_setup(params)
+    def restore() -> None:
+        obj=bpy.data.objects.get(result["main_curve_name"]); mod=obj.modifiers.get(result["modifier_name"]) if obj else None
+        if mod: obj.modifiers.remove(mod)
+        group=bpy.data.node_groups.get(result["group_name"])
+        if group and group.users == 0: bpy.data.node_groups.remove(group)
+    _record_undo(f"create Geometry Nodes branching {result['group_name']}", restore)
+    return result
+
+
+def _op_inspect_active_selection(_params: dict[str, Any]) -> dict[str, Any]:
+    active = bpy.context.view_layer.objects.active
+    return {"active_object": active.name if active else None, "active_type": active.type if active else None, "selected_objects": [obj.name for obj in bpy.context.selected_objects]}
+
+def _op_prepare_movable_structure(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous = movable_structure_operations.prepare(params)
+    _record_undo("prepare movable structure", lambda: movable_structure_operations.restore_metadata(params["object_name"], previous))
+    return result
+
+def _op_reset_structure(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous = movable_structure_operations.reset(params)
+    _record_undo("reset movable structure", lambda: movable_structure_operations.restore_metadata(params["object_name"], previous))
+    return result
+
+def _op_bend_curve_part(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous = movable_structure_operations.bend_curve_part(params)
+    _record_undo("bend curve part", lambda: movable_structure_operations.restore_curve_state(params["object_name"], previous))
+    return result
+
+def _op_move_curve_part(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous = movable_structure_operations.move_curve_part(params)
+    _record_undo("move curve part", lambda: movable_structure_operations.restore_curve_state(params["object_name"], previous))
+    return result
+
+def _op_twist_curve_part(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous = movable_structure_operations.twist_curve_part(params)
+    _record_undo("twist curve part", lambda: movable_structure_operations.restore_curve_state(params["object_name"], previous))
+    return result
+
+def _op_reset_curve_part(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous = movable_structure_operations.reset_curve_part(params)
+    _record_undo("reset curve part", lambda: movable_structure_operations.restore_curve_state(params["object_name"], previous))
+    return result
+
+def _op_prepare_mesh_extension(params: dict[str, Any]) -> dict[str, Any]:
+    result, copy_name = movable_structure_operations.prepare_mesh_extension(params)
+    _record_undo("prepare mesh extension", lambda: movable_structure_operations.remove_mesh_copy(copy_name))
+    return result
+
+def _op_prepare_selected_mesh_extension(params: dict[str, Any]) -> dict[str, Any]:
+    result, copy_name = movable_structure_operations.prepare_selected_mesh_extension(params)
+    _record_undo("prepare selected mesh extension", lambda: movable_structure_operations.remove_mesh_copy(copy_name))
+    return result
+
+def _op_bend_mesh_part(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous = movable_structure_operations.bend_mesh_part(params)
+    _record_undo("bend mesh part", lambda: movable_structure_operations.restore_mesh_part(params["object_name"], previous))
+    return result
+
+def _op_reset_mesh_part(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous = movable_structure_operations.reset_mesh_part(params)
+    _record_undo("reset mesh part", lambda: movable_structure_operations.restore_mesh_part(params["object_name"], previous))
+    return result
+
+def _op_create_v8_session(params: dict[str, Any]) -> dict[str, Any]:
+    result, session_name = movable_structure_operations.create_v8_session(params)
+    _record_undo("create V8.2 session", lambda: movable_structure_operations.discard_v8_session({"session_name": session_name}))
+    return result
+
+def _op_reset_v8_session(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous = movable_structure_operations.reset_v8_session(params)
+    _record_undo("reset V8.2 session", lambda: movable_structure_operations.restore_v8_session_pose(params["session_name"], previous))
+    return result
+
+def _op_pose_v8_control(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous = movable_structure_operations.pose_v8_control(params)
+    _record_undo("pose V8.2 control", lambda: movable_structure_operations.restore_v8_session_pose(params["session_name"], previous))
+    return result
+
+def _op_create_v8_auto_rig(params: dict[str, Any]) -> dict[str, Any]:
+    result, rig_name = movable_structure_operations.create_v8_auto_rig(params)
+    _record_undo("create V8.3 automatic rig", lambda: bpy.data.objects.remove(bpy.data.objects[rig_name], do_unlink=True) if bpy.data.objects.get(rig_name) else None)
+    return result
+
+def _op_create_v8_independent_handles(params: dict[str, Any]) -> dict[str, Any]:
+    result, rig_name = movable_structure_operations.create_v8_independent_handles(params)
+    _record_undo("create V8.3 independent handles", lambda: bpy.data.objects.remove(bpy.data.objects[rig_name], do_unlink=True) if bpy.data.objects.get(rig_name) else None)
+    return result
+
+def _op_accept_v8_session(params: dict[str, Any]) -> dict[str, Any]:
+    result, previous_name = movable_structure_operations.accept_v8_session(params)
+    _record_undo("accept V8.2 session", lambda: movable_structure_operations.restore_v8_session_acceptance(params["session_name"], previous_name))
+    return result
+
+
 Operation = Callable[[dict[str, Any]], dict[str, Any]]
 OPERATIONS: dict[str, Operation] = {
     "ping": _op_ping,
     "inspect_scene": _op_inspect_scene,
+    "inspect_scene_detailed": evaluator_operations.inspect_scene_detailed,
+    "inspect_active_selection": _op_inspect_active_selection,
+    "evaluate_mesh": evaluator_operations.evaluate_mesh,
+    "evaluate_asset_readiness": evaluator_operations.evaluate_asset_readiness,
+    "inspect_rigging_structure": evaluator_operations.inspect_rigging_structure,
+    "inspect_movable_structure": movable_structure_operations.inspect, "prepare_movable_structure": _op_prepare_movable_structure,
+    "list_movable_parts": movable_structure_operations.list_parts, "get_part_state": movable_structure_operations.get_part_state,
+    "reset_structure": _op_reset_structure,
+    "bend_curve_part": _op_bend_curve_part, "reset_curve_part": _op_reset_curve_part,
+    "move_curve_part": _op_move_curve_part, "twist_curve_part": _op_twist_curve_part,
+    "propose_mesh_extension": movable_structure_operations.propose_mesh_extension,
+    "prepare_selected_mesh_extension": _op_prepare_selected_mesh_extension,
+    "prepare_mesh_extension": _op_prepare_mesh_extension, "bend_mesh_part": _op_bend_mesh_part, "reset_mesh_part": _op_reset_mesh_part,
+    "create_v8_session": _op_create_v8_session, "inspect_v8_session": movable_structure_operations.inspect_v8_session,
+    "reset_v8_session": _op_reset_v8_session, "accept_v8_session": _op_accept_v8_session,
+    "pose_v8_control": _op_pose_v8_control,
+    "create_v8_auto_rig": _op_create_v8_auto_rig,
+    "create_v8_independent_handles": _op_create_v8_independent_handles,
+    "propose_v8_photo_pose": movable_structure_operations.propose_v8_photo_pose,
+    "discard_v8_session": movable_structure_operations.discard_v8_session,
+    "evaluate_spatial": evaluator_operations.evaluate_spatial,
+    "evaluate_tubular": evaluator_operations.evaluate_tubular,
+    "evaluate_penetration": evaluator_operations.evaluate_penetration,
     "inspect_object": _op_inspect_object,
     "create_primitive": _op_create_primitive,
     "transform_object": _op_transform_object,
     "delete_object": _op_delete_object,
     "validate_mesh": _op_validate_mesh,
+    "inspect_mesh_detailed": mesh_operations.inspect_mesh_detailed,
+    "inspect_uv": mesh_operations.inspect_uv,
+    "evaluate_uv_layout": mesh_operations.evaluate_uv_layout,
+    "unwrap_uv": mesh_operations.unwrap_uv,
+    "sculpt_smooth_region": mesh_operations.sculpt_smooth_region,
+    "recalculate_normals": mesh_operations.recalculate_normals,
+    "flip_normals": mesh_operations.flip_normals,
+    "subdivide_mesh": mesh_operations.subdivide_mesh,
+    "smooth_mesh": mesh_operations.smooth_mesh,
+    "create_material": mesh_operations.create_material,
+    "assign_material": mesh_operations.assign_material,
+    "set_base_color": lambda params: mesh_operations.set_material_value(params, "Base Color", "base_color"),
+    "set_roughness": lambda params: mesh_operations.set_material_scalar(params, "Roughness", "roughness"),
+    "set_metallic": lambda params: mesh_operations.set_material_scalar(params, "Metallic", "metallic"),
+    "set_alpha": lambda params: mesh_operations.set_material_scalar(params, "Alpha", "alpha"),
+    "add_modifier": mesh_operations.add_modifier,
+    "solidify_mesh": mesh_operations.solidify_mesh,
+    "make_mesh_solid": mesh_operations.make_mesh_solid,
+    "set_modifier_parameter": mesh_operations.set_modifier_parameter,
+    "remove_modifier": mesh_operations.remove_modifier,
+    "apply_modifier": mesh_operations.apply_modifier,
+    "merge_vertices": mesh_operations.merge_vertices,
+    "bridge_edge_loops": mesh_operations.bridge_edge_loops,
+    "split_mesh_by_plane": mesh_operations.split_mesh_by_plane,
+    "split_selected_mesh_by_view_line": mesh_operations.split_selected_mesh_by_view_line,
+    "fill_hole": mesh_operations.fill_hole,
+    "boolean_union": lambda params: mesh_operations.boolean_operation(params, "UNION"),
+    "boolean_difference": lambda params: mesh_operations.boolean_operation(params, "DIFFERENCE"),
+    "boolean_intersection": lambda params: mesh_operations.boolean_operation(params, "INTERSECT"),
+    "decimate_mesh": mesh_operations.decimate_mesh,
+    "voxel_remesh": mesh_operations.voxel_remesh,
     "save_blend": _op_save_blend,
     "undo": _op_undo,
     "capture_screen": _op_capture_screen,
+    "capture_controlled_view": _op_capture_controlled_view,
+    "create_procedural_tube_setup": _op_create_procedural_tube_setup,
+    "create_surface_scatter_setup": _op_create_surface_scatter_setup,
+    "create_procedural_branching_setup": _op_create_procedural_branching_setup,
+    "inspect_geometry_node_tree": geometry_nodes_operations.inspect_geometry_node_tree,
+    "create_curve": curve_operations.create_curve,
+    "inspect_curve": curve_operations.inspect_curve,
+    "add_curve_point": curve_operations.add_point,
+    "move_curve_point": curve_operations.move_point,
+    "remove_curve_point": curve_operations.remove_point,
+    "set_curve_handle_type": curve_operations.set_handle_type,
+    "set_curve_handle_position": curve_operations.set_handle_position,
+    "subdivide_curve": curve_operations.subdivide_curve,
+    "resample_curve": curve_operations.resample_curve,
+    "convert_curve_to_mesh": curve_operations.convert_curve_to_mesh,
+    "set_curve_point_radius": lambda params: curve_operations.set_point_profile(params, "radius"),
+    "set_curve_point_tilt": lambda params: curve_operations.set_point_profile(params, "tilt"),
+    "set_curve_bevel_depth": lambda params: curve_operations.set_curve_property(params, "bevel_depth"),
+    "set_curve_bevel_resolution": lambda params: curve_operations.set_curve_property(params, "bevel_resolution"),
+    "set_curve_resolution": lambda params: curve_operations.set_spline_property(params, "resolution_u"),
+    "set_curve_cyclic": lambda params: curve_operations.set_spline_property(
+        params, "use_cyclic_u", param_field="cyclic"
+    ),
 }
 
 
 def dispatch_operation(operation: str, params: dict[str, Any]) -> dict[str, Any]:
     """Execute one already-validated V0 operation on Blender's main thread."""
+    if operation == "execute_batch":
+        results = []
+        for index, step in enumerate(params["steps"]):
+            try:
+                results.append({"operation": step["operation"], "result": dispatch_operation(step["operation"], step["params"])})
+            except Exception as exc:
+                return {"status": "failed", "failed_step": index + 1, "message": str(exc), "results": results}
+        return {"status": "completed", "results": results}
     handler = OPERATIONS.get(operation)
     if handler is None:
         raise ValueError(f"Operation is not implemented in V0: {operation!r}")
