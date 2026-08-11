@@ -244,6 +244,7 @@ def _op_create_cell2d_symbol(params: dict[str, Any]) -> dict[str, Any]:
     obj["hb_asset_id"] = params["asset_id"] or ""
     obj["hb_category"] = params["visual_category"]
     obj["hb_domain"] = params["domain"]
+    obj["hb_anchor"] = params["anchor"]
     obj["hb_shape_family"] = params["shape_family"]
     obj["hb_reference_id"] = params["reference_id"]
     obj["hb_source_observation_id"] = params["source_observation_id"]
@@ -262,6 +263,7 @@ def _op_create_cell2d_symbol(params: dict[str, Any]) -> dict[str, Any]:
         "asset_id": params["asset_id"],
         "visual_category": params["visual_category"],
         "domain": params["domain"],
+        "anchor": params["anchor"],
         "reference_id": params["reference_id"],
         "dimensions": list(obj.dimensions),
     }

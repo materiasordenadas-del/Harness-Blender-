@@ -1,6 +1,6 @@
 {
   "style_id": "harness-cell-diagram",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "coordinate_system": {
     "plane": "XY",
     "camera": "ORTHOGRAPHIC",
@@ -54,6 +54,7 @@
     "ion_channel": {"layer": "membrane_proteins", "material": "membrane_protein", "shape_family": "membrane_capsule"},
     "pump": {"layer": "membrane_proteins", "material": "membrane_protein", "shape_family": "membrane_capsule"},
     "exchanger": {"layer": "membrane_proteins", "material": "membrane_protein", "shape_family": "membrane_capsule"},
+    "transporter": {"layer": "membrane_proteins", "material": "membrane_protein", "shape_family": "membrane_capsule"},
     "receptor": {"layer": "membrane_proteins", "material": "membrane_protein", "shape_family": "receptor"},
     "signaling_protein": {"layer": "pathways", "material": "signaling_protein", "shape_family": "ellipse"},
     "second_messenger": {"layer": "pathways", "material": "second_messenger", "shape_family": "circle"},

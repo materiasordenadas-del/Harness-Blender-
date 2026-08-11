@@ -30,7 +30,7 @@ def build_scene_packet(plan: dict[str, Any]) -> dict[str, Any]:
     for instance in plan["instances"]:
         if not isinstance(instance, dict):
             raise ValueError("each instance must be an object")
-        required_instance = {"instance_id", "source_observation_id", "asset_id", "visual_category", "domain", "bounds", "style"}
+        required_instance = {"instance_id", "source_observation_id", "asset_id", "visual_category", "domain", "anchor", "bounds", "style"}
         if set(instance) != required_instance:
             raise ValueError("instance has an unexpected shape")
         object_name = f"Cell2D_{instance['instance_id']}"
@@ -47,6 +47,7 @@ def build_scene_packet(plan: dict[str, Any]) -> dict[str, Any]:
                 "asset_id": instance["asset_id"],
                 "visual_category": instance["visual_category"],
                 "domain": instance["domain"],
+                "anchor": instance["anchor"],
                 "bounds": instance["bounds"],
                 "shape_family": style["shape_family"],
                 "material": style["material"],

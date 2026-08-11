@@ -13,6 +13,7 @@ def _ready_plan():
             "asset_id": "aqp2",
             "visual_category": "ion_channel",
             "domain": "apical",
+            "anchor": "apical:u=0.4",
             "bounds": [1.0, 2.0, 3.0, 4.0],
             "style": {"layer": "membrane_proteins", "material": "membrane_protein", "shape_family": "membrane_capsule", "z": 0.3, "color": "#F4C542"},
         }],
@@ -29,6 +30,7 @@ def test_scene_packet_preserves_canonical_identity_and_provenance():
     assert operation["params"]["object_name"] == "Cell2D_ion_channel_001"
     assert operation["params"]["asset_id"] == "aqp2"
     assert operation["params"]["reference_id"] == "ref_123"
+    assert operation["params"]["anchor"] == "apical:u=0.4"
     assert operation["params"]["z"] == 0.3
 
 

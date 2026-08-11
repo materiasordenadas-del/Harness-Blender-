@@ -84,18 +84,21 @@ def build_reconstruction_plan(
     for index, observation in enumerate(observations, start=1):
         if not isinstance(observation, dict):
             raise ValueError(f"observations[{index - 1}] must be an object")
-        required = {"observation_id", "visual_category", "domain", "bounds", "confidence", "asset_id"}
+        required = {"observation_id", "visual_category", "domain", "anchor", "bounds", "confidence", "asset_id"}
         if set(observation) != required:
             raise ValueError(f"observations[{index - 1}] must match the reference analysis contract")
         observation_id = observation["observation_id"]
         category = observation["visual_category"]
         domain = observation["domain"]
+        anchor = observation["anchor"]
         bounds = observation["bounds"]
         confidence = _number(observation["confidence"], f"observations[{index - 1}].confidence")
         if not isinstance(observation_id, str) or not observation_id:
             raise ValueError("observation_id must be a non-empty string")
         if domain not in _VALID_DOMAINS:
             raise ValueError(f"observations[{index - 1}].domain is unknown")
+        if not isinstance(anchor, str) or not anchor.strip():
+            raise ValueError(f"observations[{index - 1}].anchor must be a non-empty string")
         if not isinstance(bounds, list) or len(bounds) != 4:
             raise ValueError("bounds must contain x, y, width and height")
         normalized_bounds = [_number(value, "bounds") for value in bounds]
@@ -121,6 +124,7 @@ def build_reconstruction_plan(
             "asset_id": asset_id,
             "visual_category": category,
             "domain": domain,
+            "anchor": anchor,
             "bounds": normalized_bounds,
             "style": visual_style,
         })

@@ -61,7 +61,7 @@ def test_create_primitive_is_normalized():
 def test_cell2d_symbol_is_typed_and_rejects_unregistered_values():
     params = {
         "object_name": "Cell2D_AQP2_001", "asset_id": "aqp2", "visual_category": "ion_channel",
-        "domain": "apical", "bounds": [0, 1, 2, 1], "shape_family": "membrane_capsule",
+        "domain": "apical", "anchor": "apical:u=0.2", "bounds": [0, 1, 2, 1], "shape_family": "membrane_capsule",
         "material": "membrane_protein", "color": "#f4c542", "z": 0.3,
         "reference_id": "ref_123", "source_observation_id": "observation_1",
     }

@@ -36,6 +36,7 @@ Las operaciones futuras deben colocar elementos en la capa apropiada y rechazar 
 - ion_channel
 - pump
 - exchanger
+- transporter
 - receptor
 - signaling_protein
 - second_messenger

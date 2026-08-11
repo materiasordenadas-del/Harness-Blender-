@@ -24,6 +24,7 @@ _REQUIRED_SYMBOLS = {
     "ion_channel",
     "pump",
     "exchanger",
+    "transporter",
     "receptor",
     "signaling_protein",
     "second_messenger",

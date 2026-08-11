@@ -16,7 +16,7 @@ from typing import Any
 
 ALLOWED_PRIMITIVES = {"cube", "uv_sphere", "cylinder", "cone", "torus"}
 CELL2D_CATEGORIES = {
-    "membrane", "cytoplasm", "organelle", "ion_channel", "pump", "exchanger", "receptor",
+    "membrane", "cytoplasm", "organelle", "ion_channel", "pump", "exchanger", "transporter", "receptor",
     "signaling_protein", "second_messenger", "ion", "vesicle", "activation_arrow",
     "inhibition_line", "transport_arrow", "label",
 }
@@ -264,7 +264,7 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
 
     if operation == "create_cell2d_symbol":
         allowed = {
-            "object_name", "asset_id", "visual_category", "domain", "bounds", "shape_family",
+            "object_name", "asset_id", "visual_category", "domain", "anchor", "bounds", "shape_family",
             "material", "color", "z", "reference_id", "source_observation_id",
         }
         _reject_unknown_keys(params, allowed, where="create_cell2d_symbol parameter")
@@ -290,6 +290,7 @@ def validate_operation_params(operation: str, params: Any) -> dict[str, Any]:
             "asset_id": asset_id,
             "visual_category": category,
             "domain": domain,
+            "anchor": _name(params["anchor"], "anchor"),
             "bounds": _bounds(params["bounds"]),
             "shape_family": shape_family,
             "material": material,
